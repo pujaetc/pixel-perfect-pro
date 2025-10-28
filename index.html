@@ -3159,92 +3159,58 @@ function callApiViaForm(payload) {
             }
         };
         const handleAiUpscale = async (factor, buttonElement) => {
-             {
-                window.showToast('ClipDrop API key is required for AI Upscaling.', 'error');
-                manageApiKeysBtn.click();
-                return;
-            }
-            if (!currentFileObject) {
-                window.showToast('Please upload an image first.', 'error');
-                return;
-            }
-            if (aiUpscaleDropdown) aiUpscaleDropdown.classList.add('hidden');
-            window.showToast('Upscaling from original image. Manual adjustments will be reset.', 'info');
-            if (resetSlidersBtn) resetSlidersBtn.click();
-            const upscaleIcon = buttonElement?.querySelector('.upscale-icon');
-            const upscaleSpinner = buttonElement?.querySelector('.upscale-spinner');
-            if (buttonElement) buttonElement.disabled = true;
-            if (upscaleIcon) upscaleIcon.classList.add('hidden');
-            if (upscaleSpinner) upscaleSpinner.classList.remove('hidden');
-            const formData = new FormData();
-            formData.append('image_file', currentFileObject);
-            try {
-                const { width: originalWidth, height: originalHeight } = currentImageDimensions;
-                let targetWidth = originalWidth * factor;
-                let targetHeight = originalHeight * factor;
-                const MAX_API_DIMENSION = 4096;
-                if (targetWidth > MAX_API_DIMENSION || targetHeight > MAX_API_DIMENSION) {
-                    const ratio = Math.min(MAX_API_DIMENSION / targetWidth, MAX_API_DIMENSION / targetHeight);
-                    targetWidth = Math.floor(targetWidth * ratio);
-                    targetHeight = Math.floor(targetHeight * ratio);
-                    window.showToast(`Image is too large for full ${factor}X upscale. Upscaling to max allowed size: ${targetWidth}x${targetHeight}.`, 'info');
-                }
-                formData.append('target_width', targetWidth);
-                formData.append('target_height', targetHeight);
-                const response = await fetch('https://clipdrop-api.co/image-upscaling/v1/upscale', {
-                    method: 'POST',
-                    headers: { 'x-api-key': clipDropApiKey.trim() },
-                    body: formData,
-                });
-                if (response.ok) {
-                    const imageBlob = await response.blob();
-                    const newFileName = `Upscaled-AI-${factor}x-${currentUploadedFileName || 'image.jpg'}`;
-                    const newFile = new File([imageBlob], newFileName, { type: imageBlob.type });
-                  
-                     logUserAction('ai_upscale', {
-                        filename: newFile.name,
-                        factor: `${factor}x`,
-                        original_size: currentFileObject.size,
-                        final_size: newFile.size
-                    });
-                  
-                    currentFileObject = newFile;
-                    currentUploadedFileName = newFile.name;
-                    const objectURL = URL.createObjectURL(newFile);
-                    if (imagePreview) imagePreview.src = objectURL;
-                    const img = new Image();
-                    img.onload = () => {
-                        currentImageDimensions = { width: img.naturalWidth, height: img.naturalHeight };
-                        displayImageTechProperties();
-                    };
-                    img.src = objectURL;
-                    originalImageSrcForEnhance = objectURL;
-                    enhancedImageSrcForEnhance = objectURL;
-                    if (beforeImageSlider) beforeImageSlider.src = originalImageSrcForEnhance;
-                    if (afterImageSlider) afterImageSlider.src = originalImageSrcForEnhance;
-                    if(resetSlidersBtn) resetSlidersBtn.click();
-                    if (enhanceSuggestions) {
-                         enhancementSuggestionsData = null;
-                         enhanceSuggestions.innerHTML = `<p class="text-gray-500">Image modified. Click "Re-check Image" for new suggestions.</p>`;
-                    }
-                    imageBase64 = await toBase64(newFile);
-                    currentRecentFileCacheKey = await addFileToRecents(newFile, currentRecentFileCacheKey);
-                    window.showToast(`Image successfully upscaled by ${factor}x! Preview updated.`, 'success');
-                } else {
-                    const error = await response.json().catch(() => ({error: 'Unknown API error'}));
-                    throw new Error(error.error || `HTTP error! status: ${response.status}`);
-                }
-            } catch (error) {
-                console.error('ClipDrop API Error:', error);
-                window.showToast(`AI Upscaling failed: ${error.message}`, 'error');
-            } finally {
-                if (buttonElement) {
-                    buttonElement.disabled = false;
-                    if (upscaleIcon) upscaleIcon.classList.remove('hidden');
-                    if (upscaleSpinner) upscaleSpinner.classList.add('hidden');
-                }
-            }
-        };
+    if (!currentFileObject) {
+        window.showToast('Please upload an image first.', 'error');
+        return;
+    }
+    if (aiUpscaleDropdown) aiUpscaleDropdown.classList.add('hidden');
+    window.showToast('Upscaling from original image. Manual adjustments will be reset.', 'info');
+    if (resetSlidersBtn) resetSlidersBtn.click();
+    
+    const upscaleIcon = buttonElement?.querySelector('.upscale-icon');
+    const upscaleSpinner = buttonElement?.querySelector('.upscale-spinner');
+    if (buttonElement) buttonElement.disabled = true;
+    if (upscaleIcon) upscaleIcon.classList.add('hidden');
+    if (upscaleSpinner) upscaleSpinner.classList.remove('hidden');
+
+    try {
+        // মূল ছবিটি রিসাইজ না করে সরাসরি base64 তে রূপান্তর করা হচ্ছে
+        const originalBase64 = await toBase64(currentFileObject);
+
+        const response = await fetch('/api/proxy', { // <-- URL পরিবর্তন করা হয়েছে
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                api: "clipdrop-upscale", // <-- সঠিক API নাম
+                base64Data: originalBase64
+            })
+        });
+
+        if (!response.ok) {
+            const errorResult = await response.json();
+            throw new Error(errorResult.error || `Server error: ${response.status}`);
+        }
+
+        const result = await response.json();
+        const imageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
+        const newFileName = `Upscaled-AI-${factor}x-${currentUploadedFileName || 'image.jpg'}`;
+        const newFile = new File([imageBlob], newFileName, { type: imageBlob.type });
+        
+        // বাকি UI আপডেট লজিক আগের মতোই থাকবে
+        await updateImageStateAfterEdit(newFile, URL.createObjectURL(newFile));
+        window.showToast(`Image successfully upscaled by ${factor}x! Preview updated.`, 'success');
+
+    } catch (error) {
+        console.error('AI Upscale API Error:', error);
+        window.showToast(`AI Upscaling failed: ${error.message}`, 'error');
+    } finally {
+        if (buttonElement) {
+            buttonElement.disabled = false;
+            if (upscaleIcon) upscaleIcon.classList.remove('hidden');
+            if (upscaleSpinner) upscaleSpinner.classList.add('hidden');
+        }
+    }
+};
         const handleNormalUpscale = (factor, buttonElement) => {
             if (!window.isOpenCvReady || !originalImageSrcForEnhance) return;
             if(normalUpscaleDropdown) normalUpscaleDropdown.classList.add('hidden');
@@ -3435,7 +3401,7 @@ function callApiViaForm(payload) {
             removalImageObject.src = enhancedImageSrcForEnhance || originalImageSrcForEnhance;
         }
         
-        async function handleObjectRemoval() {
+      async function handleObjectRemoval() {
     const maskData = maskCtx.getImageData(0, 0, removalMaskCanvas.width, removalMaskCanvas.height);
     if (![...maskData.data].some(c => c !== 0)) { window.showToast('Please paint a mask over the object to remove.', 'info'); return; }
     
@@ -3445,23 +3411,25 @@ function callApiViaForm(payload) {
         const imageBase64 = removalImageCanvas.toDataURL('image/jpeg').split(',')[1];
         const maskBase64 = removalMaskCanvas.toDataURL('image/png').split(',')[1];
 
-        const response = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+        const response = await fetch('/api/proxy', { // <-- URL পরিবর্তন করা হয়েছে
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                api: "clipdrop-cleanup",
+                api: "clipdrop-cleanup", // <-- সঠিক API নাম
                 imageBase64: imageBase64,
                 maskBase64: maskBase64
             })
         });
 
+        if (!response.ok) {
+            const errorResult = await response.json();
+            throw new Error(errorResult.error || `Server error: ${response.status}`);
+        }
+        
         const result = await response.json();
-        if (result.error) throw new Error(result.error);
-
         const resultingImageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
         removedObjectBlob = resultingImageBlob;
         
-        // বাকি অংশ আগের মতোই থাকবে...
         if (saveRemovedObjectBtn) saveRemovedObjectBtn.disabled = false;
         const newSrc = URL.createObjectURL(resultingImageBlob);
         removalImageObject.onload = () => {
@@ -3853,23 +3821,25 @@ function callApiViaForm(payload) {
         }
 
         async function applyBatchAIUpscale(blob, factor) {
-            const tempFile = new File([blob], "temp_image.jpg", { type: "image/jpeg" });
-            const formData = new FormData();
-            formData.append('image_file', tempFile);
-            
-            const response = await fetch('https://clipdrop-api.co/image-upscaling/v1/upscale', {
-                method: 'POST',
-                headers: { 'x-api-key': clipDropApiKey.trim() },
-                body: formData,
-            });
+    const base64Data = await toBase64(new File([blob], "temp.jpg"));
+    
+    const response = await fetch('/api/proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            api: "clipdrop-upscale",
+            base64Data: base64Data
+        })
+    });
 
-            if (response.ok) {
-                return await response.blob();
-            } else {
-                const error = await response.json().catch(() => ({error: 'Unknown API error'}));
-                throw new Error(error.error || `HTTP error! status: ${response.status}`);
-            }
-        }
+    if (response.ok) {
+        const result = await response.json();
+        return await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
+    } else {
+        const errorResult = await response.json();
+        throw new Error(errorResult.error || `Batch AI Upscale failed: ${response.status}`);
+    }
+}
         
         const downloadBatchZip = async () => {
             if (batchResults.length === 0) return;
@@ -5773,5 +5743,6 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
+
 
 
