@@ -84,6 +84,7 @@ export default async function handler(request, response) {
         const formData = new FormData();
         const imageBlob = new Blob([Buffer.from(payload.base64Data, 'base64')], { type: 'image/jpeg' });
         formData.append('image_file', imageBlob, 'image.jpg');
+        // target_width এবং target_height পাঠানোর কোডটি মুছে ফেলা হয়েছে, কারণ এটি এখানে প্রয়োজন নেই
 
         const apiFetch = await fetch('https://clipdrop-api.co/image-upscaling/v1/upscale', {
           method: 'POST',
