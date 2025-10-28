@@ -425,7 +425,7 @@
         <!-- Icon Buttons -->
         <div class="hidden md:flex items-center gap-4">
             
-            <button id="manageApiKeysBtn" class="text-gray-400 hover:text-white transition-colors"><i class="ph ph-gear text-xl"></i></button>
+            <button class="text-gray-400 hover:text-white transition-colors"><i class="ph ph-gear text-xl"></i></button>
             <div id="auth-section" class="relative">
                 <button id="login-button" class="text-gray-400 hover:text-white transition-colors"><i class="ph ph-user-circle text-2xl"></i></button>
                 <img id="user-avatar" src="" alt="User Avatar" class="hidden w-8 h-8 rounded-full bg-gray-700 border-2 border-gray-600 cursor-pointer">
@@ -2278,9 +2278,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const lvProgress = document.getElementById('lvProgress');
         const lvGrid = document.getElementById('lvGrid');
         const lvEmpty = document.getElementById('lvEmpty');
-        const apiKeyModal = document.getElementById('apiKeyModal');
-        const closeApiKeyModalBtn = document.getElementById('closeApiKeyModalBtn');
-        const saveApiKeysBtn = document.getElementById('saveApiKeysBtn');
         let lvResults = [];
 
         if (progressCircle) {
@@ -2501,31 +2498,25 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         const callGeminiAPI = async (prompt, imageBase64Data_unused, expectJson = true) => {
-            // The key is checked on the server, but we check here for good UX
             const apiKey = localStorage.getItem('geminiApiKey');
             if (!apiKey) {
                 throw new Error("Gemini API key is missing. Please set it in the settings.");
             }
             
-            console.log("Resizing image before sending to Gemini API via proxy...");
-            
-            // For batch metadata, originalImageSrcForEnhance might not be set, so we use the provided data
-            let imageToSendBase64;
-            if(imageBase64Data_unused){
-                imageToSendBase64 = imageBase64Data_unused;
-            } else {
-                 if (!originalImageSrcForEnhance) throw new Error("Original image source is missing.");
-                const imageBlobForApi = await resizeImageForApi(originalImageSrcForEnhance, 1024);
-                imageToSendBase64 = await toBase64(imageBlobForApi);
-            }
-            
-            // The API_URL is now our local proxy
-            const API_URL = '/api/proxy';
+            console.log("Resizing image before sending to Gemini API...");
+            if (!originalImageSrcForEnhance) throw new Error("Original image source is missing.");
+
+            const imageBlobForApi = await resizeImageForApi(originalImageSrcForEnhance, 1024);
+            const imageBase64Data = await toBase64(imageBlobForApi);
+            const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent?key=${apiKey}`;
             
             const payload = {
-                api: "gemini-pro-vision", // Tell the proxy which service to use
-                prompt: prompt,
-                imageBase64: imageToSendBase64
+                contents: [{
+                    parts: [
+                        { text: prompt },
+                        { inline_data: { mime_type: "image/jpeg", data: imageBase64Data } }
+                    ]
+                }]
             };
 
             const response = await fetch(API_URL, {
@@ -2536,23 +2527,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!response.ok) {
                 const errorResult = await response.json();
-                const errorMessage = errorResult?.error || `Server proxy error: ${response.status}`;
+                const errorMessage = errorResult?.error?.message || `Server error: ${response.status}`;
                 throw new Error(errorMessage);
             }
 
             const result = await response.json();
-            // Assuming the proxy returns a simple JSON with a 'textContent' field
-            const textContent = result.textContent; 
-            if (!textContent) throw new Error("Invalid API response structure from proxy server.");
+            const textContent = result.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!textContent) throw new Error("Invalid API response structure from server.");
 
             if (expectJson) {
                 try {
-                    // Same JSON parsing logic
                     const jsonMatch = textContent.match(/```json\s*([\s\S]*?)\s*```|({[\s\S]*})/);
-                    if (!jsonMatch) throw new Error("No JSON object found in API response from proxy.");
+                    if (!jsonMatch) throw new Error("No JSON object found in API response.");
                     return JSON.parse(jsonMatch[1] || jsonMatch[2]);
                 } catch(e) {
-                     throw new Error("AI response from proxy was not valid JSON. " + e.message);
+                     throw new Error("AI response was not valid JSON. " + e.message);
                 }
             } else {
                 return textContent;
@@ -2567,7 +2556,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (loadingState) loadingState.classList.remove('hidden');
             const promptText = `Analyze the provided image for a comprehensive, professional-level aesthetic and technical review. Output ONLY a valid JSON object. Do not include any explanatory text before or after the JSON. The JSON object should have the following structure: { "aestheticScore": <number from 0-100 for overall appeal>, "scoreBreakdown": { "lighting": <number 0-100>, "composition": <number 0-100>, "sharpness": <number 0-100>, "colorHarmony": <number 0-100>, "subjectFocus": <number 0-100> }, "tags": ["<up to 25 concise tags>"], "qualityInsights": { "compositionQuality": "<'Poor'|'Fair'|'Good'|'Excellent'>", "brightness": "<'Underexposed'|'Balanced'|'Overexposed'>", "contrast": "<'Low'|'Medium'|'High'>", "noiseLevel": "<'Low'|'Moderate'|'High'>", "subjectClarity": "<'Blurry'|'Soft'|'Sharp'>", "overallImpression": "<Briefly, e.g., 'Snapshot feel'>" }, "enhancementSuggestions": [ { "adjustment": "<e.g., 'Increase brightness by +10', 'Reduce saturation by -15', 'Sharpen image'>", "reason": "<why this will improve the image>" } ] } Ensure all numeric scores are integers. For adjustments, if a numeric value is implied, include it with its sign (e.g., +10, -15).`;
             try {
-                const parsedData = await callGeminiAPI(promptText, null); // Pass null, it will use global originalImageSrcForEnhance
+                const parsedData = await callGeminiAPI(promptText, imageBase64);
                 if (currentFileObject && window.logUserAction) {
                     window.logUserAction('analyze_image', { 
                         filename: currentFileObject.name, 
@@ -2649,7 +2638,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (enhanceSuggestions) enhanceSuggestions.innerHTML = `<p class="text-gray-400 flex items-center gap-2"><i class="ph ph-spinner animate-spin text-2xl mr-2"></i>Generating suggestions...</p>`;
             try {
-                const parsedData = await callGeminiAPI(promptForEnhancement, null, true);
+                const parsedData = await callGeminiAPI(promptForEnhancement, imageBase64, true);
                 displayEnhanceResults(parsedData);
                 displayImageTechProperties(); 
             } catch (error) {
@@ -2737,7 +2726,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (thumb) thumb.src = originalImageSrcForEnhance || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Crect width='100%25' height='100%25' fill='%23222b3a'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='gray' font-size='18'%3ENo Image%3C/text%3E%3C/svg%3E";
             if (fileNameDiv) fileNameDiv.textContent = currentUploadedFileName;
             const promptText = `Analyze the image and generate SEO-friendly metadata. Provide ONLY a valid JSON object with the keys: 'fileName', 'title', and 'keywords' (as an array of strings). Use the original image's characteristics. Example: {"fileName": "red-rose-with-dew-drops.jpg", "title": "Vibrant Red Rose Covered in Morning Dew | Macro Photography", "keywords": ["red rose", "flower", "macro", "dew drops", "nature", "romance", "beauty"]}`;
-            try { const data = await callGeminiAPI(promptText, null, true); currentMetadata = data;  logUserAction('generate_metadata', {
+            try { const data = await callGeminiAPI(promptText, imageBase64, true); currentMetadata = data;  logUserAction('generate_metadata', {
                     filename: currentUploadedFileName
                 }); displayMetadata(data); } 
             catch (error) { console.error('Metadata generation failed:', error); if (window.showToast) window.showToast(`Metadata generation failed: ${error.message}`, 'error'); if (metadataContent) metadataContent.innerHTML = `<p class="text-red-400">Failed to generate metadata.</p>`; }
@@ -2755,7 +2744,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (thumb) thumb.src = originalImageSrcForEnhance || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Crect width='100%25' height='100%25' fill='%23222b3a'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='gray' font-size='18'%3ENo Image%3C/text%3E%3C/svg%3E";
             if (fileNameDiv) fileNameDiv.textContent = currentUploadedFileName;
             const promptText = `Describe the provided image in vivid detail, as if you were creating a prompt for an AI image generator like Midjourney or DALL-E. Capture the subject, style, lighting, composition, and mood. Provide ONLY the text of the prompt, without any extra formatting, labels, or quotation marks.`;
-            try { const data = await callGeminiAPI(promptText, null, false); displayPrompt(data); } 
+            try { const data = await callGeminiAPI(promptText, imageBase64, false); displayPrompt(data); } 
             catch(error) { console.error('Prompt generation failed:', error); if (window.showToast) window.showToast(`Prompt generation failed: ${error.message}`, 'error'); if (promptContent) promptContent.textContent = `Failed to generate prompt.`; }
         };
         const displayPrompt = (promptText) => { if (promptContent) promptContent.textContent = promptText; };
@@ -3000,66 +2989,67 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         const handleAiUpscale = async (factor, buttonElement) => {
-            if (!currentFileObject) {
-                window.showToast('Please upload an image first.', 'error');
-                return;
-            }
-            if (aiUpscaleDropdown) aiUpscaleDropdown.classList.add('hidden');
-            window.showToast('Upscaling from original image. Manual adjustments will be reset.', 'info');
-            if (resetSlidersBtn) resetSlidersBtn.click();
-            
-            const upscaleIcon = buttonElement?.querySelector('.upscale-icon');
-            const upscaleSpinner = buttonElement?.querySelector('.upscale-spinner');
-            if (buttonElement) buttonElement.disabled = true;
-            if (upscaleIcon) upscaleIcon.classList.add('hidden');
-            if (upscaleSpinner) upscaleSpinner.classList.remove('hidden');
+    if (!currentFileObject) {
+        window.showToast('Please upload an image first.', 'error');
+        return;
+    }
+    if (aiUpscaleDropdown) aiUpscaleDropdown.classList.add('hidden');
+    window.showToast('Upscaling from original image. Manual adjustments will be reset.', 'info');
+    if (resetSlidersBtn) resetSlidersBtn.click();
+    
+    const upscaleIcon = buttonElement?.querySelector('.upscale-icon');
+    const upscaleSpinner = buttonElement?.querySelector('.upscale-spinner');
+    if (buttonElement) buttonElement.disabled = true;
+    if (upscaleIcon) upscaleIcon.classList.add('hidden');
+    if (upscaleSpinner) upscaleSpinner.classList.remove('hidden');
 
-            try {
-                const originalBase64 = await toBase64(currentFileObject);
-                const { width: originalWidth, height: originalHeight } = currentImageDimensions;
+    try {
+        const originalBase64 = await toBase64(currentFileObject);
+        const { width: originalWidth, height: originalHeight } = currentImageDimensions;
 
-                if (!originalWidth || !originalHeight) {
-                    throw new Error("Could not determine original image dimensions.");
-                }
+        // নিশ্চিত করুন যে width এবং height সঠিক সংখ্যা
+        if (!originalWidth || !originalHeight) {
+            throw new Error("Could not determine original image dimensions.");
+        }
 
-                const response = await fetch('/api/proxy', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        api: "clipdrop-upscale",
-                        imageBase64: originalBase64,
-                        factor: factor,
-                        originalWidth: originalWidth,
-                        originalHeight: originalHeight
-                    })
-                });
+        const response = await fetch('/api/proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                api: "clipdrop-upscale",
+                base64Data: originalBase64,
+                factor: factor, // <-- ফ্যাক্টর পাঠানো হচ্ছে
+                originalWidth: originalWidth, // <-- মূল প্রস্থ পাঠানো হচ্ছে
+                originalHeight: originalHeight // <-- মূল উচ্চতা পাঠানো হচ্ছে
+            })
+        });
 
-                if (!response.ok) {
-                    const errorResult = await response.json();
-                    throw new Error(errorResult.error || `Server error: ${response.status}`);
-                }
+        if (!response.ok) {
+            const errorResult = await response.json();
+            throw new Error(errorResult.error || `Server error: ${response.status}`);
+        }
 
-                const result = await response.json();
-                const imageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
-                
-                const newFileName = `Upscaled-AI-${factor}x-${currentUploadedFileName || 'image.jpg'}`;
-                const newFile = new File([imageBlob], newFileName, { type: imageBlob.type });
-                
-                await updateImageStateAfterEdit(newFile, URL.createObjectURL(newFile));
-                window.showToast(`Image successfully upscaled by ${factor}x! Preview updated.`, 'success');
+        const result = await response.json();
+        const imageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
+        
+        const newFileName = `Upscaled-AI-${factor}x-${currentUploadedFileName || 'image.jpg'}`;
+        const newFile = new File([imageBlob], newFileName, { type: imageBlob.type });
+        
+        await updateImageStateAfterEdit(newFile, URL.createObjectURL(newFile));
+        window.showToast(`Image successfully upscaled by ${factor}x! Preview updated.`, 'success');
 
-            } catch (error) {
-                console.error('AI Upscale API Error:', error);
-                window.showToast(`AI Upscaling failed: ${error.message}`, 'error');
-            } finally {
-                if (buttonElement) {
-                    buttonElement.disabled = false;
-                    if (upscaleIcon) upscaleIcon.classList.remove('hidden');
-                    if (upscaleSpinner) upscaleSpinner.classList.add('hidden');
-                }
-            }
-        };
-
+    } catch (error) {
+        console.error('AI Upscale API Error:', error);
+        window.showToast(`AI Upscaling failed: ${error.message}`, 'error');
+    } finally {
+        if (buttonElement) {
+            buttonElement.disabled = false;
+            if (upscaleIcon) upscaleIcon.classList.remove('hidden');
+            if (upscaleSpinner) upscaleSpinner.classList.add('hidden');
+        }
+    }
+};
+ 
         const handleNormalUpscale = (factor, buttonElement) => {
             if (!window.isOpenCvReady || !originalImageSrcForEnhance) return;
             if(normalUpscaleDropdown) normalUpscaleDropdown.classList.add('hidden');
@@ -3171,45 +3161,45 @@ document.addEventListener('DOMContentLoaded', () => {
         // ****** END: NEW HELPER FUNCTION FOR RESIZING ******
 
        const handleReimagine = async () => {
-            if (!currentFileObject) { window.showToast('Please upload an image first.', 'error'); return; }
+    if (!currentFileObject) { window.showToast('Please upload an image first.', 'error'); return; }
 
-            reimagineBtn.disabled = true;
-            reimagineBtn.innerHTML = `<i class="ph ph-spinner animate-spin"></i> Reimagining...`;
-            
-            try {
-                const sourceImageUrl = enhancedImageSrcForEnhance || originalImageSrcForEnhance;
-                const imageBlobForApi = await resizeImageForApi(sourceImageUrl, 1024);
-                const imageBase64 = await toBase64(imageBlobForApi);
+    reimagineBtn.disabled = true;
+    reimagineBtn.innerHTML = `<i class="ph ph-spinner animate-spin"></i> Reimagining...`;
+    
+    try {
+        const sourceImageUrl = enhancedImageSrcForEnhance || originalImageSrcForEnhance;
+        const imageBlobForApi = await resizeImageForApi(sourceImageUrl, 1024);
+        const imageBase64 = await toBase64(imageBlobForApi);
 
-                // --- মূল সমাধান: Vercel প্রক্সিকে কল করা হচ্ছে ---
-                const response = await fetch('/api/proxy', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        api: "clipdrop-reimagine", // <-- সঠিক API নাম
-                        imageBase64: imageBase64
-                    })
-                });
+        // --- মূল সমাধান: Vercel প্রক্সিকে কল করা হচ্ছে ---
+        const response = await fetch('/api/proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                api: "clipdrop-reimagine", // <-- সঠিক API নাম
+                imageBase64: imageBase64
+            })
+        });
 
-                if (!response.ok) {
-                    const errorResult = await response.json();
-                    throw new Error(errorResult.error || `Server error: ${response.status}`);
-                }
-                
-                const result = await response.json();
-                const imageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
-                const newFileName = `Reimagined-${currentUploadedFileName || 'image.jpg'}`;
-                const newFile = new File([imageBlob], newFileName, { type: imageBlob.type });
-                await updateImageStateAfterEdit(newFile, URL.createObjectURL(newFile));
-                window.showToast('Image successfully reimagined!', 'success');
-            } catch (error) {
-                console.error('Reimagine API Error:', error);
-                window.showToast(`Reimagine failed: ${error.message}`, 'error');
-            } finally {
-                reimagineBtn.disabled = false;
-                reimagineBtn.innerHTML = `<i class="ph-bold ph-sparkle"></i> Reimagine`;
-            }
-        };
+        if (!response.ok) {
+            const errorResult = await response.json();
+            throw new Error(errorResult.error || `Server error: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        const imageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
+        const newFileName = `Reimagined-${currentUploadedFileName || 'image.jpg'}`;
+        const newFile = new File([imageBlob], newFileName, { type: imageBlob.type });
+        await updateImageStateAfterEdit(newFile, URL.createObjectURL(newFile));
+        window.showToast('Image successfully reimagined!', 'success');
+    } catch (error) {
+        console.error('Reimagine API Error:', error);
+        window.showToast(`Reimagine failed: ${error.message}`, 'error');
+    } finally {
+        reimagineBtn.disabled = false;
+        reimagineBtn.innerHTML = `<i class="ph-bold ph-sparkle"></i> Reimagine`;
+    }
+};
      
         // ****** END: UPDATED REIMAGINE FUNCTION ******
 
@@ -3623,88 +3613,91 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         const handleBatchProcess = async () => {
-            if (batchQueue.length === 0) {
-                showToast("Please add images to the queue first.", 'info');
-                return;
-            }
-            
-            const settings = getBatchSettings();
-             
-            logUserAction('batch_process_started', {
+    if (batchQueue.length === 0) {
+        showToast("Please add images to the queue first.", 'info');
+        return;
+    }
+    
+    const settings = getBatchSettings();
+     
+          logUserAction('batch_process_started', {
                 image_count: batchQueue.length,
-                settings: settings
+                settings: settings // এটি দিয়ে আপনি জানতে পারবেন ব্যবহারকারী কোন সেটিং ব্যবহার করেছে
             });
 
-            if (settings.generateMetadata && !localStorage.getItem('geminiApiKey')) {
-                 showToast('Gemini API key is required for metadata generation.', 'error');
-                 return;
-            }
-             if (settings.upscale.startsWith('ai_') && !localStorage.getItem('clipDropApiKey')) {
-                 showToast('ClipDrop API key is required for AI Upscale.', 'error');
-                 return;
-            }
+    const checks = {
+        'normal_2x': { condition: !isOpenCvReady, message: 'OpenCV is not ready for Normal Upscale.' },
+        'normal_4x': { condition: !isOpenCvReady, message: 'OpenCV is not ready for Normal Upscale.' },
+        'ai_2x': { condition: !clipDropApiKey, message: 'ClipDrop API key is required for AI Upscale.' }
+    };
 
-            startBatchProcessBtn.disabled = true;
-            downloadBatchZipBtn.disabled = true;
-            if(downloadMetadataCsvBtn) downloadMetadataCsvBtn.disabled = true;
-            batchProgress.textContent = "Starting...";
-            batchResults = [];
-            batchMetadataResults = [];
+    if (checks[settings.upscale] && checks[settings.upscale].condition) {
+        showToast(checks[settings.upscale].message, 'error');
+        return;
+    }
+   
 
-            for (let i = 0; i < batchQueue.length; i++) {
-                const file = batchQueue[i];
-                batchProgress.textContent = `Processing ${i + 1}/${batchQueue.length}: ${file.name}`;
+    startBatchProcessBtn.disabled = true;
+    downloadBatchZipBtn.disabled = true;
+    if(downloadMetadataCsvBtn) downloadMetadataCsvBtn.disabled = true;
+    batchProgress.textContent = "Starting...";
+    batchResults = [];
+    batchMetadataResults = [];
+
+    for (let i = 0; i < batchQueue.length; i++) {
+        const file = batchQueue[i];
+        batchProgress.textContent = `Processing ${i + 1}/${batchQueue.length}: ${file.name}`;
+        try {
+            // ১. মেটাডেটা জেনারেট (যদি সিলেক্ট করা থাকে)
+            if (settings.generateMetadata) {
                 try {
-                    // 1. Generate Metadata (if selected)
-                    if (settings.generateMetadata) {
-                        try {
-                            batchProgress.textContent = `Generating metadata for ${file.name}...`;
-                            const imageBase64Data = await toBase64(file);
-                            const promptText = `Analyze the image and generate SEO-friendly metadata. Provide ONLY a valid JSON object with the keys: 'fileName', 'title', 'keywords' (as an array of max 15 strings), and 'description' (a short, compelling sentence). Example: {"fileName": "red-rose.jpg", "title": "Vibrant Red Rose in Full Bloom", "keywords": ["red rose", "flower", "macro", "nature", "romance"], "description": "A stunning macro shot of a vibrant red rose, capturing the delicate texture of its petals."}`;
-                            const meta = await callGeminiAPI(promptText, imageBase64Data, true);
-                            batchMetadataResults.push({
-                                fileName: file.name,
-                                title: meta.title || '',
-                                keywords: (meta.keywords || []).join(', '),
-                                description: meta.description || ''
-                            });
-                        } catch (metaError) {
-                            console.error(`Metadata generation failed for ${file.name}:`, metaError);
-                            showToast(`Metadata failed for ${file.name}.`, 'error');
-                            batchMetadataResults.push({ fileName: file.name, title: 'ERROR', keywords: '', description: '' });
-                        }
-                    }
-
-                    // 2. Process Image (Adjustments & Upscale)
-                    batchProgress.textContent = `Applying adjustments to ${file.name}...`;
-                    let processedBlob = await applyBatchAdjustmentsToBlob(file, settings);
-
-                    if (settings.upscale.startsWith('normal_')) {
-                        processedBlob = await applyBatchNormalUpscale(processedBlob, settings.upscale === 'normal_4x' ? 4 : 2);
-                    } else if (settings.upscale.startsWith('ai_')) {
-                        processedBlob = await applyBatchAIUpscale(file, settings.upscale === 'ai_4x' ? 4 : 2); // Pass original file for dimensions
-                    }
-
-                    // 3. Add Watermark (if selected)
-                    if (settings.addWatermark && ( (settings.watermarkType === 'text' && settings.watermarkText) || (settings.watermarkType === 'image' && settings.watermarkImageFile) )) {
-                        batchProgress.textContent = `Adding watermark to ${file.name}...`;
-                        processedBlob = await applyWatermarkToBlob(processedBlob, settings);
-                    }
-                    
-                    batchResults.push({ name: `processed_${file.name}`, blob: processedBlob });
-
-                } catch (error) {
-                    console.error(`Failed to process ${file.name}:`, error);
-                    showToast(`Skipped ${file.name} due to an error.`, 'error');
+                    batchProgress.textContent = `Generating metadata for ${file.name}...`;
+                    const imageBase64Data = await toBase64(file);
+                    const promptText = `Analyze the image and generate SEO-friendly metadata. Provide ONLY a valid JSON object with the keys: 'fileName', 'title', 'keywords' (as an array of max 15 strings), and 'description' (a short, compelling sentence). Example: {"fileName": "red-rose.jpg", "title": "Vibrant Red Rose in Full Bloom", "keywords": ["red rose", "flower", "macro", "nature", "romance"], "description": "A stunning macro shot of a vibrant red rose, capturing the delicate texture of its petals."}`;
+                    const meta = await callGeminiAPI(promptText, imageBase64Data, true);
+                    batchMetadataResults.push({
+                        fileName: file.name,
+                        title: meta.title || '',
+                        keywords: (meta.keywords || []).join(', '),
+                        description: meta.description || ''
+                    });
+                } catch (metaError) {
+                    console.error(`Metadata generation failed for ${file.name}:`, metaError);
+                    showToast(`Metadata failed for ${file.name}.`, 'error');
+                    // একটি খালি এন্ট্রি যোগ করুন যাতে CSV-তে ফাইলের নাম থাকে
+                    batchMetadataResults.push({ fileName: file.name, title: 'ERROR', keywords: '', description: '' });
                 }
             }
 
-            batchProgress.textContent = `Processing Complete! ${batchResults.length} images processed.`;
-            downloadBatchZipBtn.disabled = batchResults.length === 0;
-            if(downloadMetadataCsvBtn) downloadMetadataCsvBtn.disabled = batchMetadataResults.length === 0;
-            startBatchProcessBtn.disabled = false;
-        };
+            // ২. ছবি প্রসেস (Adjustments & Upscale)
+            batchProgress.textContent = `Applying adjustments to ${file.name}...`;
+            let processedBlob = await applyBatchAdjustmentsToBlob(file, settings);
 
+            if (settings.upscale.startsWith('normal_')) {
+                processedBlob = await applyBatchNormalUpscale(processedBlob, settings.upscale === 'normal_4x' ? 4 : 2);
+            } else if (settings.upscale.startsWith('ai_')) {
+                processedBlob = await applyBatchAIUpscale(processedBlob, settings.upscale === 'ai_4x' ? 4 : 2);
+            }
+
+            // ৩. ওয়াটারমার্ক যোগ (যদি সিলেক্ট করা থাকে)
+            if (settings.addWatermark && ( (settings.watermarkType === 'text' && settings.watermarkText) || (settings.watermarkType === 'image' && settings.watermarkImageFile) )) {
+            batchProgress.textContent = `Adding watermark to ${file.name}...`;
+            processedBlob = await applyWatermarkToBlob(processedBlob, settings);
+         }
+            
+            batchResults.push({ name: `processed_${file.name}`, blob: processedBlob });
+
+        } catch (error) {
+            console.error(`Failed to process ${file.name}:`, error);
+            showToast(`Skipped ${file.name} due to an error.`, 'error');
+        }
+    }
+
+    batchProgress.textContent = `Processing Complete! ${batchResults.length} images processed.`;
+    downloadBatchZipBtn.disabled = batchResults.length === 0;
+    if(downloadMetadataCsvBtn) downloadMetadataCsvBtn.disabled = batchMetadataResults.length === 0;
+    startBatchProcessBtn.disabled = false;
+};
         async function applyBatchAdjustmentsToBlob(file, settings) {
             return new Promise(async (resolve, reject) => {
                 try {
@@ -3745,37 +3738,27 @@ document.addEventListener('DOMContentLoaded', () => {
              });
         }
 
-       async function applyBatchAIUpscale(originalFile, factor) {
-            const base64Data = await toBase64(originalFile);
-            
-            // Get original dimensions
-            const dimensions = await new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-                img.onerror = reject;
-                img.src = URL.createObjectURL(originalFile);
-            });
+       async function applyBatchAIUpscale(blob, factor) {
+    const base64Data = await toBase64(new File([blob], "temp.jpg"));
+    
+    const response = await fetch('/api/proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            api: "clipdrop-upscale",
+            base64Data: base64Data,
+            factor: factor // <-- এই লাইনটি যোগ করা হয়েছে
+        })
+    });
 
-            const response = await fetch('/api/proxy', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    api: "clipdrop-upscale",
-                    base64Data: base64Data,
-                    factor: factor,
-                    originalWidth: dimensions.width,
-                    originalHeight: dimensions.height
-                })
-            });
-
-            if (response.ok) {
-                const result = await response.json();
-                return await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
-            } else {
-                const errorResult = await response.json();
-                throw new Error(errorResult.error || `Batch AI Upscale failed: ${response.status}`);
-            }
-        }
+    if (response.ok) {
+        const result = await response.json();
+        return await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
+    } else {
+        const errorResult = await response.json();
+        throw new Error(errorResult.error || `Batch AI Upscale failed: ${response.status}`);
+    }
+}
         
         const downloadBatchZip = async () => {
             if (batchResults.length === 0) return;
@@ -4594,7 +4577,7 @@ if (batchWatermarkSize) {
                         const a = document.createElement('a');
                         a.href = url; a.download = lvResults[i].name; document.body.appendChild(a); a.click(); document.body.removeChild(a);
                         });
-                      }
+                      } // <-- এই বন্ধনীটি যোগ করুন
 
 
                    if (lvProgress) lvProgress.textContent = `Generated ${i+1}/${count}`;
@@ -5225,29 +5208,47 @@ if (batchWatermarkSize) {
       
        // Initialize API keys
         const initializeApiKeys = () => {
-            geminiApiKey = localStorage.getItem('geminiApiKey') || '';
-            clipDropApiKey = localStorage.getItem('clipDropApiKey') || '';
-            
-            const geminiApiKeyInput = document.getElementById('geminiApiKeyInput');
-            const clipdropApiKeyInput = document.getElementById('clipdropApiKeyInput');
-            
-            if (geminiApiKeyInput) geminiApiKeyInput.value = geminiApiKey;
-            if (clipdropApiKeyInput) clipdropApiKeyInput.value = clipDropApiKey;
-        };
+    // Load keys from localStorage into the global variables
+    geminiApiKey = localStorage.getItem('geminiApiKey') || ''; // Use the new global variable
+    clipDropApiKey = localStorage.getItem('clipDropApiKey') || '';
+    
+    // Set input values if they exist
+    const geminiApiKeyInput = document.getElementById('geminiApiKeyInput');
+    const clipdropApiKeyInput = document.getElementById('clipdropApiKeyInput');
+    
+    if (geminiApiKeyInput) geminiApiKeyInput.value = geminiApiKey; // Assign to the input
+    if (clipdropApiKeyInput) clipdropApiKeyInput.value = clipDropApiKey;
 
-        const saveApiKeys = () => {
-            const geminiApiKeyInput = document.getElementById('geminiApiKeyInput');
-            const clipdropApiKeyInput = document.getElementById('clipdropApiKeyInput');
+            // Add API key input event listeners
             if (geminiApiKeyInput) {
-                geminiApiKey = geminiApiKeyInput.value.trim();
-                localStorage.setItem('geminiApiKey', geminiApiKey);
+                geminiApiKeyInput.addEventListener('change', () => {
+                    const newKey = geminiApiKeyInput.value.trim();
+                    localStorage.setItem('geminiApiKey', newKey);
+                    if (newKey) {
+                        window.showToast?.('Gemini API key saved', 'success');
+                    }
+                });
             }
+
             if (clipdropApiKeyInput) {
-                clipDropApiKey = clipdropApiKeyInput.value.trim();
-                localStorage.setItem('clipDropApiKey', clipDropApiKey);
+                clipdropApiKeyInput.addEventListener('change', () => {
+                    const newKey = clipdropApiKeyInput.value.trim();
+                    localStorage.setItem('clipDropApiKey', newKey);
+                    if (newKey) {
+                        window.showToast?.('ClipDrop API key saved', 'success');
+                    }
+                });
             }
-            window.showToast?.('API keys saved!', 'success');
-            apiKeyModal.classList.add('hidden');
+
+            // Check if API keys are missing and show notification
+            if (!geminiApiKey) {
+                window.showToast?.('Gemini API key is missing. Please set it in the settings.', 'warning');
+                // Open settings modal automatically if API key is missing
+                const manageApiKeysBtn = document.getElementById('manageApiKeysBtn');
+                if (manageApiKeysBtn) {
+                    manageApiKeysBtn.click();
+                }
+            }
         };
 
         loadRecentFiles();
@@ -5666,4 +5667,17 @@ document.addEventListener('DOMContentLoaded', function () {
 <script async="async" data-cfasync="false" src="//pl26941346.profitableratecpm.com/7128caf782579cf1a6e998e1d0a0fe7b/invoke.js"></script>
    
 </body>
-</html>
+</html>    
+
+
+
+
+
+
+
+
+
+
+
+
+
