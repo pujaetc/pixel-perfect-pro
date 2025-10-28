@@ -2113,27 +2113,16 @@ document.addEventListener('DOMContentLoaded', () => {
     <div id="container-7128caf782579cf1a6e998e1d0a0fe7b"></div>
 
     <!-- Main Application Logic -->
-    <script>
+           <script>
     document.addEventListener('DOMContentLoaded', () => {
       
       
-            // একটি টাইমআউট সেট করা হচ্ছে, যদি কোনো উত্তর না আসে
-            setTimeout(() => {
-                if (window[callbackName]) {
-                    reject(new Error("Request timed out. The server might be busy or there's a network issue."));
-                    delete window[callbackName];
-                    document.body.removeChild(iframe);
-                    document.body.removeChild(form);
-                }
-            }, 45000); // ৪৫ সেকেন্ড পর টাইমআউট
+            // Duplicate fragment removed: the original block here contained a partial
+            // iframe/form timeout + submit logic that was accidentally duplicated
+            // earlier in the file and caused JS parse errors. The full, correct
+            // implementation exists later in the file, so this truncated copy was
+            // deleted to restore syntactically valid JavaScript.
 
-            form.submit();
-        } catch (error) {
-            reject(error);
-        }
-    });
-}
-      
         // --- Global State ---
         
         let imageBase64 = '';
@@ -2550,30 +2539,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (enhanceModal) enhanceModal.classList.remove('hidden');
         };
+        
        
-       
-
-            // একটি টাইমআউট সেট করা হচ্ছে
-            setTimeout(() => {
-                if (window[callbackName]) {
-                    // যদি ৪৫ সেকেন্ড পর উত্তর না আসে
-                    delete window[callbackName];
-                    document.body.removeChild(iframe);
-                    document.body.removeChild(form);
-                    reject(new Error("Request timed out. The server might be busy or there's a network issue."));
-                }
-            }, 45000); // ৪৫ সেকেন্ড
-
-            // ফর্ম সাবমিট করা হচ্ছে
-            form.submit();
-            
-        } catch (error) {
-            reject(error);
-        }
-    });
-}
-
- 
+        // NOTE: Removed a duplicated/truncated iframe/form timeout + submit block
+        // which caused JavaScript parse errors. The proper implementation for
+        // that flow exists elsewhere in the file; this copy was an accidental
+        // paste and has been removed to restore valid syntax.
 
 // ==========================================================
 // ||       UPDATED callGeminiAPI FUNCTION                 ||
@@ -5261,8 +5232,7 @@ if (batchWatermarkSize) {
         initializeApiKeys();
         if (window.isOpenCvReady) { if (window.updateEnhanceButtonState) window.updateEnhanceButtonState(); }
     });
-</script>
-
+    </script>
     
     <!-- Authentication Logic -->
     <script>
@@ -5674,7 +5644,6 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
-
 
 
 
