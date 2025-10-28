@@ -2119,6 +2119,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let imageBase64 = '';
         let currentFileObject = null;
         let apiKey = '';
+        let geminiApiKey = ''; 
         let clipDropApiKey = '';
         let analysisResults = null;
         let currentMetadata = null;
@@ -3737,7 +3738,7 @@ document.addEventListener('DOMContentLoaded', () => {
              });
         }
 
-        async function applyBatchAIUpscale(blob, factor) {
+       async function applyBatchAIUpscale(blob, factor) {
     const base64Data = await toBase64(new File([blob], "temp.jpg"));
     
     const response = await fetch('/api/proxy', {
@@ -3745,7 +3746,8 @@ document.addEventListener('DOMContentLoaded', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             api: "clipdrop-upscale",
-            base64Data: base64Data
+            base64Data: base64Data,
+            factor: factor // <-- এই লাইনটি যোগ করা হয়েছে
         })
     });
 
@@ -5206,16 +5208,16 @@ if (batchWatermarkSize) {
       
        // Initialize API keys
         const initializeApiKeys = () => {
-            // Load keys from localStorage into the global variables
-            apiKey = localStorage.getItem('geminiApiKey') || '';
-            clipDropApiKey = localStorage.getItem('clipDropApiKey') || '';
-            
-            // Set input values if they exist
-            const geminiApiKeyInput = document.getElementById('geminiApiKeyInput');
-            const clipdropApiKeyInput = document.getElementById('clipdropApiKeyInput');
-            
-            if (geminiApiKeyInput) geminiApiKeyInput.value = apiKey;
-            if (clipdropApiKeyInput) clipdropApiKeyInput.value = clipDropApiKey;
+    // Load keys from localStorage into the global variables
+    geminiApiKey = localStorage.getItem('geminiApiKey') || ''; // Use the new global variable
+    clipDropApiKey = localStorage.getItem('clipDropApiKey') || '';
+    
+    // Set input values if they exist
+    const geminiApiKeyInput = document.getElementById('geminiApiKeyInput');
+    const clipdropApiKeyInput = document.getElementById('clipdropApiKeyInput');
+    
+    if (geminiApiKeyInput) geminiApiKeyInput.value = geminiApiKey; // Assign to the input
+    if (clipdropApiKeyInput) clipdropApiKeyInput.value = clipDropApiKey;
 
             // Add API key input event listeners
             if (geminiApiKeyInput) {
@@ -5666,6 +5668,7 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
+
 
 
 
