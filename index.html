@@ -3237,7 +3237,46 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         // ****** END: NEW HELPER FUNCTION FOR RESIZING ******
 
-       
+       const handleReimagine = async () => {
+    if (!currentFileObject) { window.showToast('Please upload an image first.', 'error'); return; }
+
+    reimagineBtn.disabled = true;
+    reimagineBtn.innerHTML = `<i class="ph ph-spinner animate-spin"></i> Reimagining...`;
+    
+    try {
+        const sourceImageUrl = enhancedImageSrcForEnhance || originalImageSrcForEnhance;
+        const imageBlobForApi = await resizeImageForApi(sourceImageUrl, 1024);
+        const imageBase64 = await toBase64(imageBlobForApi);
+
+        // --- মূল সমাধান: Vercel প্রক্সিকে কল করা হচ্ছে ---
+        const response = await fetch('/api/proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                api: "clipdrop-reimagine", // <-- সঠিক API নাম
+                imageBase64: imageBase64
+            })
+        });
+
+        if (!response.ok) {
+            const errorResult = await response.json();
+            throw new Error(errorResult.error || `Server error: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        const imageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
+        const newFileName = `Reimagined-${currentUploadedFileName || 'image.jpg'}`;
+        const newFile = new File([imageBlob], newFileName, { type: imageBlob.type });
+        await updateImageStateAfterEdit(newFile, URL.createObjectURL(newFile));
+        window.showToast('Image successfully reimagined!', 'success');
+    } catch (error) {
+        console.error('Reimagine API Error:', error);
+        window.showToast(`Reimagine failed: ${error.message}`, 'error');
+    } finally {
+        reimagineBtn.disabled = false;
+        reimagineBtn.innerHTML = `<i class="ph-bold ph-sparkle"></i> Reimagine`;
+    }
+};
      
         // ****** END: UPDATED REIMAGINE FUNCTION ******
 
@@ -3291,53 +3330,7 @@ document.addEventListener('DOMContentLoaded', () => {
             removalImageObject.src = enhancedImageSrcForEnhance || originalImageSrcForEnhance;
         }
         
-     async function handleObjectRemoval() {
-    const maskData = maskCtx.getImageData(0, 0, removalMaskCanvas.width, removalMaskCanvas.height);
-    if (![...maskData.data].some(c => c !== 0)) { window.showToast('Please paint a mask over the object to remove.', 'info'); return; }
     
-    if (removalLoadingOverlay) removalLoadingOverlay.classList.remove('hidden');
-    
-    try {
-        const imageBase64 = removalImageCanvas.toDataURL('image/jpeg').split(',')[1];
-        const maskBase64 = removalMaskCanvas.toDataURL('image/png').split(',')[1];
-
-        // --- মূল সমাধান: Vercel প্রক্সিকে কল করা হচ্ছে ---
-        const response = await fetch('/api/proxy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                api: "clipdrop-cleanup", // <-- সঠিক API নাম
-                imageBase64: imageBase64,
-                maskBase64: maskBase64
-            })
-        });
-
-        if (!response.ok) {
-            const errorResult = await response.json();
-            throw new Error(errorResult.error || `Server error: ${response.status}`);
-        }
-        
-        const result = await response.json();
-        const resultingImageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
-        removedObjectBlob = resultingImageBlob;
-        
-        if (saveRemovedObjectBtn) saveRemovedObjectBtn.disabled = false;
-        const newSrc = URL.createObjectURL(resultingImageBlob);
-        removalImageObject.onload = () => {
-            removalCtx.clearRect(0, 0, removalImageCanvas.width, removalImageCanvas.height);
-            removalCtx.drawImage(removalImageObject, 0, 0);
-        };
-        removalImageObject.src = newSrc;
-        if (clearMaskBtn) clearMaskBtn.click();
-        window.showToast('Object removed! Click Save & Close to apply.', 'success');
-
-    } catch (error) {
-        console.error('Object Removal Error:', error);
-        window.showToast(`Object removal failed: ${error.message}`, 'error');
-    } finally {
-        if (removalLoadingOverlay) removalLoadingOverlay.classList.add('hidden');
-    }
-}
       
         async function saveAndCloseObjectRemoval() {
             if (!removedObjectBlob) {
@@ -5634,6 +5627,7 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
+
 
 
 
