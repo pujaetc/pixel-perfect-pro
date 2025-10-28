@@ -2113,1020 +2113,638 @@ document.addEventListener('DOMContentLoaded', () => {
     <div id="container-7128caf782579cf1a6e998e1d0a0fe7b"></div>
 
     <!-- Main Application Logic -->
-           <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      
-      
-            // একটি টাইমআউট সেট করা হচ্ছে, যদি কোনো উত্তর না আসে
-            setTimeout(() => {
-                if (window[callbackName]) {
-                    reject(new Error("Request timed out. The server might be busy or there's a network issue."));
-                    delete window[callbackName];
-                    document.body.removeChild(iframe);
-                    document.body.removeChild(form);
-                }
-            }, 45000); // ৪৫ সেকেন্ড পর টাইমআউট
+     <script>
+document.addEventListener('DOMContentLoaded', () => {
+    // --- Global State ---
+    let imageBase64 = '';
+    let currentFileObject = null;
+    let analysisResults = null;
+    let currentMetadata = null;
+    let enhancementSuggestionsData = null; 
+    let originalImageSrcForEnhance = '';
+    let enhancedImageSrcForEnhance = '';
+    let currentUploadedFileName = ''; 
+    let currentImageDimensions = { width: 0, height: 0 };
+    let currentRecentFileCacheKey = null;
+    let cropper = null;
+    let watermarkFile = null;
+    let batchQueue = [];
+    let batchResults = [];
+    let batchMetadataResults = [];
+    let currentBatchPreviewIndex = null;
+    let fileToDownloadFromRecents = null;
+    window.downloadContext = null; 
 
-            form.submit();
-        } catch (error) {
-            reject(error);
-        }
+    // --- Cache API ---
+    const CACHE_NAME = 'pixelperfect-recent-images-v1';
+    const MAX_RECENT_FILES = 10;
+
+    // --- Element Selectors ---
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const enhanceBtn = document.getElementById('enhanceBtn');
+    const batchBtn = document.getElementById('batchBtn');
+    const metadataBtn = document.getElementById('metadataBtn');
+    const promptBtn = document.getElementById('promptBtn');
+    const superResolutionBtn = document.getElementById('superResolutionBtn');
+    const localVariationsBtn = document.getElementById('localVariationsBtn');
+    const uploadBox = document.getElementById('uploadBox');
+    const imageUpload = document.getElementById('imageUpload');
+    const browseBtn = document.getElementById('browseBtn');
+    const imageUrlInput = document.getElementById('imageUrl');
+    const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+    const imagePreview = document.getElementById('imagePreview');
+    const closePreviewBtn = document.getElementById('closePreviewBtn');
+    const viewLargeBtn = document.getElementById('viewLargeBtn');
+    const enhancePromptTypeDropdown = document.getElementById('enhancePromptType');
+    const recentFilesContainer = document.getElementById('recentFilesContainer');
+    const recentFilesGrid = document.getElementById('recentFilesGrid');
+    const initialState = document.getElementById('initialState');
+    const loadingState = document.getElementById('loadingState');
+    const loadingText = document.getElementById('loadingText');
+    const resultsContent = document.getElementById('resultsContent');
+    const progressCircle = document.getElementById('progressCircle');
+    const scoreText = document.getElementById('scoreText');
+    const scoreBreakdown = document.getElementById('scoreBreakdown');
+    const tagsContainer = document.getElementById('tagsContainer');
+    const copyTagsBtn = document.getElementById('copyTagsBtn');
+    const qualityInsights = document.getElementById('qualityInsights');
+    const enhanceModal = document.getElementById('enhanceModal');
+    const closeEnhanceModalBtn = document.getElementById('closeEnhanceModalBtn');
+    const enhanceSuggestions = document.getElementById('enhanceSuggestions');
+    const enhancedImagePreviewCanvas = document.getElementById('enhancedImagePreview');
+    const downloadEnhancedBtn = document.getElementById('downloadEnhancedBtn');
+    const resetEnhancementsBtn = document.getElementById('resetEnhancementsBtn');
+    const recheckImageBtn = document.getElementById('recheckImageBtn');
+    const resetSlidersBtn = document.getElementById('resetSlidersBtn');
+    const toastNotification = document.getElementById('toast-notification');
+    const cropBtn = document.getElementById('cropBtn');
+    const objectRemovalBtn = document.getElementById('objectRemovalBtn');
+    const reimagineBtn = document.getElementById('reimagineBtn'); 
+    const normalUpscaleToggleBtn = document.getElementById('normalUpscaleToggleBtn');
+    const normalUpscaleDropdown = document.getElementById('normalUpscaleDropdown');
+    const normalUpscale2xBtn = document.getElementById('normalUpscale2xBtn');
+    const normalUpscale4xBtn = document.getElementById('normalUpscale4xBtn');
+    const aiUpscaleToggleBtn = document.getElementById('aiUpscaleToggleBtn');
+    const aiUpscaleDropdown = document.getElementById('aiUpscaleDropdown');
+    const aiUpscale2xBtn = document.getElementById('aiUpscale2xBtn');
+    const aiUpscale4xBtn = document.getElementById('aiUpscale4xBtn');
+    const cropModal = document.getElementById('cropModal');
+    const closeCropModalBtn = document.getElementById('closeCropModalBtn');
+    const cropImage = document.getElementById('cropImage');
+    const applyCropBtn = document.getElementById('applyCropBtn');
+    const cropResetBtn = document.getElementById('cropResetBtn');
+    const objectRemovalModal = document.getElementById('objectRemovalModal');
+    const closeObjectRemovalModalBtn = document.getElementById('closeObjectRemovalModalBtn');
+    const removalCanvasContainer = document.getElementById('removal-canvas-container');
+    const removalImageCanvas = document.getElementById('removalImageCanvas');
+    const removalMaskCanvas = document.getElementById('removalMaskCanvas');
+    const removalLoadingOverlay = document.getElementById('removalLoadingOverlay');
+    const brushSizeSlider = document.getElementById('brushSizeSlider');
+    const brushSizeValue = document.getElementById('brushSizeValue');
+    const clearMaskBtn = document.getElementById('clearMaskBtn');
+    const removeObjectBtn = document.getElementById('removeObjectBtn');
+    const saveRemovedObjectBtn = document.getElementById('saveRemovedObjectBtn');
+    let removalCtx, maskCtx, removalImageObject = null, removedObjectBlob = null;
+    let isDrawing = false, lastX = 0, lastY = 0, brushSize = 20;
+    const imageCompareSlider = document.getElementById('image-compare-slider');
+    const beforeImageSlider = document.getElementById('beforeImageSlider');
+    const afterImageSliderContainer = document.getElementById('afterImageSliderContainer');
+    const afterImageSlider = document.getElementById('afterImageSlider');
+    const sliderHandle = document.getElementById('slider-handle');
+    const viewOriginalBtn = document.getElementById('viewOriginalBtn');
+    const viewEnhancedBtn = document.getElementById('viewEnhancedBtn');
+    const sliders = document.querySelectorAll('#enhanceModal input[type="range"]:not(#image-compare-slider)');
+    const enhanceLargePreviewModal = document.getElementById('enhanceLargePreviewModal');
+    const enhanceLargeImage = document.getElementById('enhanceLargeImage');
+    const closeEnhanceLargePreviewBtn = document.getElementById('closeEnhanceLargePreviewBtn');
+    const metadataModal = document.getElementById('metadataModal');
+    const closeMetadataModalBtn = document.getElementById('closeMetadataModalBtn');
+    const metadataContent = document.getElementById('metadataContent');
+    const exportMetadataBtn = document.getElementById('exportMetadataBtn');
+    const promptModal = document.getElementById('promptModal');
+    const closePromptModalBtn = document.getElementById('closePromptModalBtn');
+    const promptContent = document.getElementById('promptContent');
+    const copyPromptBtn = document.getElementById('copyPromptBtn');
+    const batchModal = document.getElementById('batchModal');
+    const closeBatchModalBtn = document.getElementById('closeBatchModalBtn');
+    const batchUploadBox = document.getElementById('batchUploadBox');
+    const batchImageUpload = document.getElementById('batchImageUpload');
+    const batchBrowseBtn = document.getElementById('batchBrowseBtn');
+    const batchQueueList = document.getElementById('batchQueueList');
+    const batchQueueCount = document.getElementById('batchQueueCount');
+    const batchClearQueueBtn = document.getElementById('batchClearQueueBtn');
+    const batchUpscaleSelect = document.getElementById('batchUpscaleSelect');
+    const batchProgress = document.getElementById('batchProgress');
+    const startBatchProcessBtn = document.getElementById('startBatchProcessBtn');
+    const downloadBatchZipBtn = document.getElementById('downloadBatchZipBtn');
+    const batchSliders = document.querySelectorAll('#batchModal input[type="range"]:not(#batch-image-compare-slider)');
+    const batchAddMoreBtn = document.getElementById('batchAddMoreBtn'); 
+    const batchPreviewContainer = document.getElementById('batchPreviewContainer'); 
+    const closeBatchPreviewBtn = document.getElementById('closeBatchPreviewBtn');
+    const batchBeforeImageSlider = document.getElementById('batch-beforeImageSlider'); 
+    const batchAfterImageSliderContainer = document.getElementById('batch-afterImageSliderContainer'); 
+    const batchAfterImageSlider = document.getElementById('batch-afterImageSlider'); 
+    const batchSliderHandle = document.getElementById('batch-slider-handle'); 
+    const batchImageCompareSlider = document.getElementById('batch-image-compare-slider');
+    const srUploadPreviewContainer = document.getElementById('srUploadPreviewContainer');
+    const srRemoveImageBtn = document.getElementById('srRemoveImageBtn');
+    const batchAddWatermark = document.getElementById('batchAddWatermark');
+    const batchWatermarkOptions = document.getElementById('batchWatermarkOptions');
+    const batchWatermarkTypeRadios = document.querySelectorAll('input[name="batchWatermarkType"]');
+    const batchWatermarkTextOptions = document.getElementById('batchWatermarkTextOptions');
+    const batchWatermarkImageOptions = document.getElementById('batchWatermarkImageOptions');
+    const batchWatermarkText = document.getElementById('batchWatermarkText');
+    const batchWatermarkImageUpload = document.getElementById('batchWatermarkImageUpload');
+    const batchWatermarkImageBtn = document.getElementById('batchWatermarkImageBtn');
+    const batchWatermarkPreview = document.getElementById('batchWatermarkPreview');
+    const batchWatermarkSize = document.getElementById('batchWatermarkSize');
+    const batchWatermarkSizeValue = document.getElementById('batchWatermarkSizeValue');
+    const batchWatermarkOpacity = document.getElementById('batchWatermarkOpacity');
+    const batchWatermarkOpacityValue = document.getElementById('batchWatermarkOpacityValue');
+    const batchWatermarkPosition = document.getElementById('batchWatermarkPosition');
+    const localVariationsModal = document.getElementById('localVariationsModal');
+    const closeLocalVariationsModalBtn = document.getElementById('closeLocalVariationsModalBtn');
+    const lvCountInput = document.getElementById('lvCount');
+    const lvIntensitySelect = document.getElementById('lvIntensity');
+    const lvSeedInput = document.getElementById('lvSeed');
+    const lvSizeSelect = document.getElementById('lvSize');
+    const lvGenerateBtn = document.getElementById('lvGenerateBtn');
+    const lvDownloadAllBtn = document.getElementById('lvDownloadAllBtn');
+    const lvProgress = document.getElementById('lvProgress');
+    const lvGrid = document.getElementById('lvGrid');
+    const lvEmpty = document.getElementById('lvEmpty');
+    const downloadMetadataCsvBtn = document.getElementById('downloadMetadataCsvBtn');
+    const batchGenerateMetadata = document.getElementById('batchGenerateMetadata');
+    let lvResults = [];
+
+    // --- Helper Functions ---
+
+    if (progressCircle) {
+        const circleRadius = progressCircle.r.baseVal.value;
+        const circumference = 2 * Math.PI * circleRadius;
+        progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
+        progressCircle.style.strokeDashoffset = circumference;
+    }
+
+    window.showToast = (message, type = 'success') => {
+        if (!toastNotification) { console.error("Toast element not found!"); return; }
+        toastNotification.textContent = message;
+        toastNotification.className = '';
+        toastNotification.classList.add('show', type);
+        setTimeout(() => toastNotification.classList.remove('show'), 4000);
+    };
+
+    window.updateEnhanceButtonState = () => {
+        const isImageLoaded = !!imageBase64;
+        const isCvReady = window.isOpenCvReady;
+        const isBackendReady = isImageLoaded; 
+
+        if (enhanceBtn) enhanceBtn.disabled = !(isBackendReady && isCvReady);
+        if (metadataBtn) metadataBtn.disabled = !isBackendReady;
+        if (promptBtn) promptBtn.disabled = !isBackendReady;
+        if (superResolutionBtn) superResolutionBtn.disabled = !isImageLoaded;
+        if (localVariationsBtn) localVariationsBtn.disabled = !(isImageLoaded && isCvReady);
+
+        if (cropBtn) cropBtn.disabled = !isImageLoaded;
+        if (objectRemovalBtn) objectRemovalBtn.disabled = !isBackendReady;
+        if (reimagineBtn) reimagineBtn.disabled = !isBackendReady;
+        if (normalUpscaleToggleBtn) normalUpscaleToggleBtn.disabled = !(isImageLoaded && isCvReady);
+        if (aiUpscaleToggleBtn) aiUpscaleToggleBtn.disabled = !isBackendReady;
+
+        if (objectRemovalBtn) objectRemovalBtn.title = isImageLoaded ? "Remove objects from the image" : "Image required";
+        if (reimagineBtn) reimagineBtn.title = isImageLoaded ? "Create variations of the image" : "Image required";
+        if (aiUpscaleToggleBtn) aiUpscaleToggleBtn.title = isImageLoaded ? "Upscale using AI" : "Image required";
+    };
+
+    const updateUI = () => {
+        const isAnalysisReady = !!imageBase64; 
+        if (analyzeBtn) analyzeBtn.disabled = !isAnalysisReady;
+        window.updateEnhanceButtonState();
+    };
+
+    const setProgress = (percent) => {
+        if (!progressCircle || !scoreText) return;
+        const circleRadius = progressCircle.r.baseVal.value;
+        const circumference = 2 * Math.PI * circleRadius;
+        const targetPercent = Math.max(0, Math.min(100, Math.round(percent)));
+        const offset = circumference - (targetPercent / 100) * circumference;
+        progressCircle.style.strokeDashoffset = offset;
+        scoreText.textContent = `${targetPercent}%`; 
+    };
+
+    const toBase64 = file => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = error => reject(error);
     });
-}
-      
-        // --- Global State ---
-        
-        let imageBase64 = '';
-        let currentFileObject = null;
-        let analysisResults = null;
-        let currentMetadata = null;
-        let enhancementSuggestionsData = null; 
-        let originalImageSrcForEnhance = '';
-        let enhancedImageSrcForEnhance = '';
-        let currentUploadedFileName = ''; 
-        let currentImageDimensions = { width: 0, height: 0 };
-        let currentRecentFileCacheKey = null;
-        let cropper = null;
-        let watermarkFile = null;
-        let batchQueue = [];
-        let batchResults = [];
-        let batchMetadataResults = [];
-        let currentBatchPreviewIndex = null; // NEW: For batch preview
-        let fileToDownloadFromRecents = null;
-        // For Super Resolution or other custom sources
-        window.downloadContext = null; // { src: objectUrl, nameBase: string }
 
-        // --- Cache API ---
-        const CACHE_NAME = 'pixelperfect-recent-images-v1';
-        const MAX_RECENT_FILES = 10;
+    // --- Image Handling & State Management ---
 
-        // --- Element Selectors ---
-        const analyzeBtn = document.getElementById('analyzeBtn');
-        const enhanceBtn = document.getElementById('enhanceBtn');
-        const batchBtn = document.getElementById('batchBtn');
-        const metadataBtn = document.getElementById('metadataBtn');
-        const promptBtn = document.getElementById('promptBtn');
-        const superResolutionBtn = document.getElementById('superResolutionBtn');
-        const localVariationsBtn = document.getElementById('localVariationsBtn');
-       
-        const uploadBox = document.getElementById('uploadBox');
-        const imageUpload = document.getElementById('imageUpload');
-        const browseBtn = document.getElementById('browseBtn');
-        const imageUrlInput = document.getElementById('imageUrl');
-        const imagePreviewContainer = document.getElementById('imagePreviewContainer');
-        const imagePreview = document.getElementById('imagePreview');
-        const closePreviewBtn = document.getElementById('closePreviewBtn');
-        const viewLargeBtn = document.getElementById('viewLargeBtn');
-        const enhancePromptTypeDropdown = document.getElementById('enhancePromptType');
-        const recentFilesContainer = document.getElementById('recentFilesContainer');
-        const recentFilesGrid = document.getElementById('recentFilesGrid');
-        const initialState = document.getElementById('initialState');
-        const loadingState = document.getElementById('loadingState');
-        const loadingText = document.getElementById('loadingText');
-        const resultsContent = document.getElementById('resultsContent');
-        const progressCircle = document.getElementById('progressCircle');
-        const scoreText = document.getElementById('scoreText');
-        const scoreBreakdown = document.getElementById('scoreBreakdown');
-        const tagsContainer = document.getElementById('tagsContainer');
-        const copyTagsBtn = document.getElementById('copyTagsBtn');
-        const qualityInsights = document.getElementById('qualityInsights');
-        const enhanceModal = document.getElementById('enhanceModal');
-        const closeEnhanceModalBtn = document.getElementById('closeEnhanceModalBtn');
-        const enhanceSuggestions = document.getElementById('enhanceSuggestions');
-        const enhancedImagePreviewCanvas = document.getElementById('enhancedImagePreview');
-        const downloadEnhancedBtn = document.getElementById('downloadEnhancedBtn');
-        const resetEnhancementsBtn = document.getElementById('resetEnhancementsBtn');
-        const recheckImageBtn = document.getElementById('recheckImageBtn');
-        const resetSlidersBtn = document.getElementById('resetSlidersBtn');
-        const toastNotification = document.getElementById('toast-notification');
-        const cropBtn = document.getElementById('cropBtn');
-        const objectRemovalBtn = document.getElementById('objectRemovalBtn');
-        const reimagineBtn = document.getElementById('reimagineBtn'); 
-        const normalUpscaleToggleBtn = document.getElementById('normalUpscaleToggleBtn');
-        const normalUpscaleDropdown = document.getElementById('normalUpscaleDropdown');
-        const normalUpscale2xBtn = document.getElementById('normalUpscale2xBtn');
-        const normalUpscale4xBtn = document.getElementById('normalUpscale4xBtn');
-        const aiUpscaleToggleBtn = document.getElementById('aiUpscaleToggleBtn');
-        const aiUpscaleDropdown = document.getElementById('aiUpscaleDropdown');
-        const aiUpscale2xBtn = document.getElementById('aiUpscale2xBtn');
-        const aiUpscale4xBtn = document.getElementById('aiUpscale4xBtn');
-        const cropModal = document.getElementById('cropModal');
-        const closeCropModalBtn = document.getElementById('closeCropModalBtn');
-        const cropImage = document.getElementById('cropImage');
-        const applyCropBtn = document.getElementById('applyCropBtn');
-        const cropResetBtn = document.getElementById('cropResetBtn');
-        const objectRemovalModal = document.getElementById('objectRemovalModal');
-        const closeObjectRemovalModalBtn = document.getElementById('closeObjectRemovalModalBtn');
-        const removalCanvasContainer = document.getElementById('removal-canvas-container');
-        const removalImageCanvas = document.getElementById('removalImageCanvas');
-        const removalMaskCanvas = document.getElementById('removalMaskCanvas');
-        const removalLoadingOverlay = document.getElementById('removalLoadingOverlay');
-        const brushSizeSlider = document.getElementById('brushSizeSlider');
-        const brushSizeValue = document.getElementById('brushSizeValue');
-        const clearMaskBtn = document.getElementById('clearMaskBtn');
-        const removeObjectBtn = document.getElementById('removeObjectBtn');
-        const saveRemovedObjectBtn = document.getElementById('saveRemovedObjectBtn');
-        let removalCtx, maskCtx, removalImageObject = null, removedObjectBlob = null;
-        let isDrawing = false, lastX = 0, lastY = 0, brushSize = 20;
-        const imageCompareSlider = document.getElementById('image-compare-slider');
-        const beforeImageSlider = document.getElementById('beforeImageSlider');
-        const afterImageSliderContainer = document.getElementById('afterImageSliderContainer');
-        const afterImageSlider = document.getElementById('afterImageSlider');
-        const sliderHandle = document.getElementById('slider-handle');
-        const viewOriginalBtn = document.getElementById('viewOriginalBtn');
-        const viewEnhancedBtn = document.getElementById('viewEnhancedBtn');
-        const sliders = document.querySelectorAll('#enhanceModal input[type="range"]:not(#image-compare-slider)');
-        const enhanceLargePreviewModal = document.getElementById('enhanceLargePreviewModal');
-        const enhanceLargeImage = document.getElementById('enhanceLargeImage');
-        const closeEnhanceLargePreviewBtn = document.getElementById('closeEnhanceLargePreviewBtn');
-        const metadataModal = document.getElementById('metadataModal');
-        const closeMetadataModalBtn = document.getElementById('closeMetadataModalBtn');
-        const metadataContent = document.getElementById('metadataContent');
-        const exportMetadataBtn = document.getElementById('exportMetadataBtn');
-        const promptModal = document.getElementById('promptModal');
-        const closePromptModalBtn = document.getElementById('closePromptModalBtn');
-        const promptContent = document.getElementById('promptContent');
-        const copyPromptBtn = document.getElementById('copyPromptBtn');
-        const batchModal = document.getElementById('batchModal');
-        const closeBatchModalBtn = document.getElementById('closeBatchModalBtn');
-        const batchUploadBox = document.getElementById('batchUploadBox');
-        const batchImageUpload = document.getElementById('batchImageUpload');
-        const batchBrowseBtn = document.getElementById('batchBrowseBtn');
-        const batchQueueList = document.getElementById('batchQueueList');
-        const batchQueueCount = document.getElementById('batchQueueCount');
-        const batchClearQueueBtn = document.getElementById('batchClearQueueBtn');
-        const batchUpscaleSelect = document.getElementById('batchUpscaleSelect');
-        const batchProgress = document.getElementById('batchProgress');
-        const startBatchProcessBtn = document.getElementById('startBatchProcessBtn');
-        const downloadBatchZipBtn = document.getElementById('downloadBatchZipBtn');
-        const batchSliders = document.querySelectorAll('#batchModal input[type="range"]:not(#batch-image-compare-slider)');
-        const batchAddMoreBtn = document.getElementById('batchAddMoreBtn'); 
-        const batchPreviewContainer = document.getElementById('batchPreviewContainer'); 
-        const closeBatchPreviewBtn = document.getElementById('closeBatchPreviewBtn');
-        const batchBeforeImageSlider = document.getElementById('batch-beforeImageSlider'); 
-        const batchAfterImageSliderContainer = document.getElementById('batch-afterImageSliderContainer'); 
-        const batchAfterImageSlider = document.getElementById('batch-afterImageSlider'); 
-        const batchSliderHandle = document.getElementById('batch-slider-handle'); 
-        const batchImageCompareSlider = document.getElementById('batch-image-compare-slider');
-        const srUploadPreviewContainer = document.getElementById('srUploadPreviewContainer');
-        const srRemoveImageBtn = document.getElementById('srRemoveImageBtn');
-        // Watermark Elements
-        const batchAddWatermark = document.getElementById('batchAddWatermark');
-        const batchWatermarkOptions = document.getElementById('batchWatermarkOptions');
-        const batchWatermarkTypeRadios = document.querySelectorAll('input[name="batchWatermarkType"]');
-        const batchWatermarkTextOptions = document.getElementById('batchWatermarkTextOptions');
-        const batchWatermarkImageOptions = document.getElementById('batchWatermarkImageOptions');
-        const batchWatermarkText = document.getElementById('batchWatermarkText');
-        const batchWatermarkImageUpload = document.getElementById('batchWatermarkImageUpload');
-        const batchWatermarkImageBtn = document.getElementById('batchWatermarkImageBtn');
-        const batchWatermarkPreview = document.getElementById('batchWatermarkPreview');
-        const batchWatermarkSize = document.getElementById('batchWatermarkSize');
-        const batchWatermarkSizeValue = document.getElementById('batchWatermarkSizeValue');
-        const batchWatermarkOpacity = document.getElementById('batchWatermarkOpacity');
-        const batchWatermarkOpacityValue = document.getElementById('batchWatermarkOpacityValue');
-        const batchWatermarkPosition = document.getElementById('batchWatermarkPosition');
-        // Local Variations selectors
-        const localVariationsModal = document.getElementById('localVariationsModal');
-        const closeLocalVariationsModalBtn = document.getElementById('closeLocalVariationsModalBtn');
-        const lvCountInput = document.getElementById('lvCount');
-        const lvIntensitySelect = document.getElementById('lvIntensity');
-        const lvSeedInput = document.getElementById('lvSeed');
-        const lvSizeSelect = document.getElementById('lvSize');
-        const lvGenerateBtn = document.getElementById('lvGenerateBtn');
-        const lvDownloadAllBtn = document.getElementById('lvDownloadAllBtn');
-        const lvProgress = document.getElementById('lvProgress');
-        const lvGrid = document.getElementById('lvGrid');
-        const lvEmpty = document.getElementById('lvEmpty');
-        let lvResults = [];
-
-
-        if (progressCircle) {
-            const circleRadius = progressCircle.r.baseVal.value;
-            const circumference = 2 * Math.PI * circleRadius;
-            progressCircle.style.strokeDasharray = `${circumference} ${circumference}`;
-            progressCircle.style.strokeDashoffset = circumference;
+    const handleFileSelect = async (file, cacheKeyToLoad = null) => {
+        if (!file || !file.type.startsWith('image/')) {
+            window.showToast('Please select a valid image file.', 'error');
+            return;
         }
-
-        window.showToast = (message, type = 'success') => {
-            if (!toastNotification) { console.error("Toast element not found!"); return; }
-            toastNotification.textContent = message;
-            toastNotification.className = '';
-            toastNotification.classList.add('show', type);
-            setTimeout(() => toastNotification.classList.remove('show'), 4000);
-        };
-
-        window.updateEnhanceButtonState = () => {
-            const isImageLoaded = !!imageBase64;
-            const isCvReady = window.isOpenCvReady;
-
-            // API কী-এর উপর নির্ভরতা সরানো হয়েছে
-            const isBackendReady = isImageLoaded; // ব্যাকএন্ড ব্যবহারের জন্য শুধু ইমেজ লোড হওয়াই যথেষ্ট
-
-            // বাটনগুলোর অবস্থা নতুন লজিক অনুযায়ী আপডেট করা হচ্ছে
-            if (enhanceBtn) enhanceBtn.disabled = !(isBackendReady && isCvReady); // Enhance-এর জন্য OpenCV এবং ইমেজ দুটোই লাগবে
-            if (metadataBtn) metadataBtn.disabled = !isBackendReady;
-            if (promptBtn) promptBtn.disabled = !isBackendReady;
-            if (superResolutionBtn) superResolutionBtn.disabled = !isImageLoaded; // এটি আগের মতোই ঠিক আছে
-            if (localVariationsBtn) localVariationsBtn.disabled = !(isImageLoaded && isCvReady); // এটিও ঠিক আছে
-
-            // Enhance মডালের বাটনগুলো
-            if (cropBtn) cropBtn.disabled = !isImageLoaded;
-            if (objectRemovalBtn) objectRemovalBtn.disabled = !isBackendReady;
-            if (reimagineBtn) reimagineBtn.disabled = !isBackendReady;
-            if (normalUpscaleToggleBtn) normalUpscaleToggleBtn.disabled = !(isImageLoaded && isCvReady);
-            if (aiUpscaleToggleBtn) aiUpscaleToggleBtn.disabled = !isBackendReady; // AI Upscale এখন ব্যাকএন্ড নির্ভর
-
-            // টাইটেল বা টুলটিপ আপডেট (অপশনাল কিন্তু ভালো অভ্যাস)
-            if (objectRemovalBtn) objectRemovalBtn.title = isImageLoaded ? "Remove objects from the image" : "Image required";
-            if (reimagineBtn) reimagineBtn.title = isImageLoaded ? "Create variations of the image" : "Image required";
-            if (aiUpscaleToggleBtn) aiUpscaleToggleBtn.title = isImageLoaded ? "Upscale using AI" : "Image required";
-        };
-
-
-       const updateUI = () => {
-            // এখন শুধু ইমেজ লোড হয়েছে কি না, তা পরীক্ষা করা হচ্ছে
-            const isAnalysisReady = !!imageBase64; 
-            if (analyzeBtn) analyzeBtn.disabled = !isAnalysisReady;
-            
-            // updateEnhanceButtonState ফাংশনটিকে কল করা হচ্ছে
-            window.updateEnhanceButtonState();
-        };
         
-        const loadApiKeysFromStorage = () => {
-            apiKey = localStorage.getItem('geminiApiKey') || '';
-            clipDropApiKey = localStorage.getItem('clipDropApiKey') || '';
-            deepAiApiKey = localStorage.getItem('deepAiApiKey') || '';
-            if (geminiApiKeyInput) geminiApiKeyInput.value = apiKey;
-            if (clipdropApiKeyInput) clipdropApiKeyInput.value = clipDropApiKey;
-            if (deepAiApiKeyInput) deepAiApiKeyInput.value = deepAiApiKey;
-            updateUI();
-        };
-
-        const saveApiKeys = () => {
-            apiKey = (geminiApiKeyInput?.value || '').trim();
-            clipDropApiKey = (clipdropApiKeyInput?.value || '').trim();
-            // Only read/store DeepAI key if the input exists in DOM
-            if (typeof deepAiApiKeyInput !== 'undefined' && deepAiApiKeyInput) {
-                deepAiApiKey = (deepAiApiKeyInput.value || '').trim();
-                localStorage.setItem('deepAiApiKey', deepAiApiKey);
-            }
-            localStorage.setItem('geminiApiKey', apiKey);
-            localStorage.setItem('clipDropApiKey', clipDropApiKey);
-            if(window.showToast) window.showToast('API Keys saved successfully!', 'success');
-            if (apiKeyModal) apiKeyModal.classList.add('hidden');
-            updateUI();
-        };
-
-        const setProgress = (percent) => {
-            if (!progressCircle || !scoreText) return;
-            const circleRadius = progressCircle.r.baseVal.value;
-            const circumference = 2 * Math.PI * circleRadius;
-            const targetPercent = Math.max(0, Math.min(100, Math.round(percent)));
-            const offset = circumference - (targetPercent / 100) * circumference;
-            progressCircle.style.strokeDashoffset = offset;
-            scoreText.textContent = `${targetPercent}%`; 
-        };
-
-        const toBase64 = file => new Promise((resolve, reject) => {
+        const uploadPreview = document.getElementById('uploadPreview');
+        const uploadPreviewImage = document.getElementById('uploadPreviewImage');
+        if (uploadPreview && uploadPreviewImage) {
             const reader = new FileReader();
+            reader.onload = (e) => {
+                uploadPreviewImage.src = e.target.result;
+                uploadPreview.classList.remove('hidden');
+            };
             reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result.split(',')[1]);
-            reader.onerror = error => reject(error);
-        });
+        }
+        
+        resetPreview();
+        currentFileObject = file;
+        currentUploadedFileName = file.name;
+        currentRecentFileCacheKey = cacheKeyToLoad; 
 
-        const handleFileSelect = async (file, cacheKeyToLoad = null) => {
-            if (!file || !file.type.startsWith('image/')) {
-                if (window.showToast) window.showToast('Please select a valid image file.', 'error');
-                return;
-            }
-            
-            const uploadPreview = document.getElementById('uploadPreview');
-            const uploadPreviewImage = document.getElementById('uploadPreviewImage');
-            if (uploadPreview && uploadPreviewImage) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    uploadPreviewImage.src = e.target.result;
-                    uploadPreview.classList.remove('hidden');
-                };
-                reader.readAsDataURL(file);
-            }
-            
-            resetPreview();
-            currentFileObject = file;
-            currentUploadedFileName = file.name;
-            currentRecentFileCacheKey = cacheKeyToLoad; 
-
-            if (uploadBox) uploadBox.classList.add('hidden');
-            if (imagePreviewContainer) imagePreviewContainer.classList.remove('hidden');
-            
-            const objectURL = URL.createObjectURL(file);
-            
-            const img = new Image();
-            img.onload = () => {
-                currentImageDimensions = { width: img.naturalWidth, height: img.naturalHeight };
-                if (typeof displayImageTechProperties === 'function') displayImageTechProperties();
-            };
-            img.src = objectURL;
-            if (imagePreview) imagePreview.src = objectURL;
-            
-            try {
-                imageBase64 = await toBase64(file);
-                originalImageSrcForEnhance = objectURL;
-                enhancedImageSrcForEnhance = objectURL;
-                if (window.showToast) window.showToast('Image loaded successfully!', 'success');
-                updateUI();
-                if (!cacheKeyToLoad) {
-                    currentRecentFileCacheKey = await addFileToRecents(file);
-                }
-            } catch (error) {
-                console.error("File to Base64 conversion error:", error);
-                if (window.showToast) window.showToast('Failed to read the image file.', 'error');
-                resetPreview();
-            }
+        if (uploadBox) uploadBox.classList.add('hidden');
+        if (imagePreviewContainer) imagePreviewContainer.classList.remove('hidden');
+        
+        const objectURL = URL.createObjectURL(file);
+        
+        const img = new Image();
+        img.onload = () => {
+            currentImageDimensions = { width: img.naturalWidth, height: img.naturalHeight };
+            if (typeof displayImageTechProperties === 'function') displayImageTechProperties();
         };
-
-        const resetPreview = () => {        
-            const uploadPreview = document.getElementById('uploadPreview');
-            const uploadPreviewImage = document.getElementById('uploadPreviewImage');
-            if (uploadPreview) {
-                uploadPreview.classList.add('hidden');
-                if (uploadPreviewImage) {
-                    uploadPreviewImage.src = '';
-                }
-            }
-            
-            if (uploadBox) uploadBox.classList.remove('hidden');
-            if (imagePreviewContainer) imagePreviewContainer.classList.add('hidden');
-            const placeholderSvg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect width='100%25' height='100%25' fill='%23222b3a'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='gray' font-size='24'%3ENo Image%3C/text%3E%3C/svg%3E";
-            if (imagePreview) imagePreview.src = placeholderSvg;
-            
-            if (beforeImageSlider) beforeImageSlider.src = '';
-            if (afterImageSlider) afterImageSlider.src = '';
-
-            imageBase64 = ''; originalImageSrcForEnhance = ''; enhancedImageSrcForEnhance = '';
-            currentFileObject = null; currentImageDimensions = { width: 0, height: 0 };
-            analysisResults = null; enhancementSuggestionsData = null; currentMetadata = null;
-            currentUploadedFileName = '';
-            currentRecentFileCacheKey = null;
-            if (resultsContent) resultsContent.classList.add('hidden');
-            if (initialState) initialState.classList.remove('hidden');
-            if (loadingState) loadingState.classList.add('hidden');
-            setProgress(0);
-            if (scoreBreakdown) scoreBreakdown.innerHTML = '';
-            if (tagsContainer) tagsContainer.innerHTML = '';
-            if (qualityInsights) qualityInsights.innerHTML = '';
-            if (imageUrlInput) imageUrlInput.value = '';
-            if (imageUpload) imageUpload.value = ''; 
+        img.src = objectURL;
+        if (imagePreview) imagePreview.src = objectURL;
+        
+        try {
+            imageBase64 = await toBase64(file);
+            originalImageSrcForEnhance = objectURL;
+            enhancedImageSrcForEnhance = objectURL;
+            window.showToast('Image loaded successfully!', 'success');
             updateUI();
-        };
-
-        const displayAnalysisResults = (data) => {
-            analysisResults = data; setProgress(data.aestheticScore || 0);
-            if (scoreBreakdown) {
-                scoreBreakdown.innerHTML = '';
-                const breakdownItems = data.scoreBreakdown || {};
-                const breakdownIcons = { lighting: 'ph-sun', composition: 'ph-grid-four', sharpness: 'ph-selection-background', colorHarmony: 'ph-palette', subjectFocus: 'ph-user-focus' };
-                Object.entries(breakdownItems).forEach(([key, value]) => {
-                    const iconClass = breakdownIcons[key] || 'ph-question';
-                    const displayName = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                    scoreBreakdown.innerHTML += `<div class="flex items-center justify-between text-sm"><div class="flex items-center gap-2"><i class="${iconClass} text-sky-400"></i><span class="text-gray-300">${displayName}</span></div><span class="font-semibold text-white">${value}/100</span></div>`;
-                });
+            if (!cacheKeyToLoad) {
+                currentRecentFileCacheKey = await addFileToRecents(file);
             }
-            if (tagsContainer) {
-                 tagsContainer.innerHTML = ''; (data.tags || []).forEach(tag => { tagsContainer.innerHTML += `<span class="bg-gray-700 text-gray-200 text-xs font-medium px-2.5 py-1 rounded-full">${tag}</span>`; });
-            }
-            if (qualityInsights) {
-                qualityInsights.innerHTML = '';
-                const insights = data.qualityInsights || {};
-                const qualityIcons = {
-                    compositionQuality: { 'Excellent': 'ph-fill ph-star-four text-green-400', 'Good': 'ph-fill ph-thumbs-up text-sky-400', 'Fair': 'ph-fill ph-warning-circle text-yellow-400', 'Poor': 'ph-fill ph-x-circle text-red-400' },
-                    brightness: { 'Balanced': 'ph-fill ph-check-circle text-green-400', 'Underexposed': 'ph-fill ph-warning text-yellow-400', 'Overexposed': 'ph-fill ph-warning text-yellow-400' },
-                    contrast: { 'High': 'ph-fill ph-arrow-up text-sky-400', 'Medium': 'ph-fill ph-minus-circle text-gray-400', 'Low': 'ph-fill ph-arrow-down text-yellow-400' },
-                    noiseLevel: { 'Low': 'ph-fill ph-check-circle text-green-400', 'Moderate': 'ph-fill ph-warning-circle text-yellow-400', 'High': 'ph-fill ph-warning text-red-400' },
-                    subjectClarity: { 'Sharp': 'ph-fill ph-check-circle text-green-400', 'Soft': 'ph-fill ph-warning-circle text-yellow-400', 'Blurry': 'ph-fill ph-x-circle text-red-400' },
-                    overallImpression: 'ph-chat-circle-text text-gray-400'
-                };
-                Object.entries(insights).forEach(([key, value]) => {
-                    let iconClass = 'ph-info text-gray-400';
-                    if (qualityIcons[key]) {
-                        if (typeof qualityIcons[key] === 'string') {
-                            iconClass = qualityIcons[key];
-                        } else if (qualityIcons[key][value]) {
-                            iconClass = qualityIcons[key][value];
-                        }
-                    }
-                    const displayName = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                    qualityInsights.innerHTML += `
-                        <div class="flex justify-between items-center mb-2 text-sm">
-                            <span class="font-medium text-gray-300">${displayName}</span>
-                            <div class="flex items-center gap-2 font-semibold">
-                                <i class="${iconClass} text-lg"></i>
-                                <span class="text-white">${value}</span>
-                            </div>
-                        </div>`;
-                });
-            }
-            if (resultsContent) resultsContent.classList.remove('hidden');
-            if (initialState) initialState.classList.add('hidden');
-            if (loadingState) loadingState.classList.add('hidden');
-        };
-        const displayEnhanceResults = (data) => {
-            enhancementSuggestionsData = data.suggestions; 
-            if (!enhanceSuggestions) return;
-            enhanceSuggestions.innerHTML = '';
-            if (resetEnhancementsBtn) resetEnhancementsBtn.click(); 
-            if (enhancementSuggestionsData && enhancementSuggestionsData.length > 0) {
-                enhanceSuggestions.innerHTML = enhancementSuggestionsData.map((item, index) => `
-                    <button data-suggestion-index="${index}" class="suggestion-btn w-full text-left p-3 bg-gray-900/50 rounded-lg border border-gray-700 hover:bg-gray-800 hover:border-sky-500 transition-all focus:outline-none focus:ring-2 focus:ring-sky-500">
-                        <div class="flex items-center"><div class="flex-grow"><p class="font-semibold text-white mb-1">${item.adjustment}</p><p class="text-gray-400 text-xs">${item.reason}</p></div><span class="applied-indicator text-green-400 text-xl ml-2"></span></div></button>`).join('');
-            } else { enhanceSuggestions.innerHTML = `<p class="text-gray-500">AI found no specific issues for the selected mode. You can still make manual adjustments or try a different mode.</p>`; }
-            
-            if (beforeImageSlider) beforeImageSlider.src = originalImageSrcForEnhance;
-            if (afterImageSlider) afterImageSlider.src = originalImageSrcForEnhance;
-            enhancedImageSrcForEnhance = originalImageSrcForEnhance;
-            if (imageCompareSlider) {
-                imageCompareSlider.value = 50;
-                imageCompareSlider.dispatchEvent(new Event('input'));
-            }
-            if (enhanceModal) enhanceModal.classList.remove('hidden');
-        };
-       
-       
-
-            // একটি টাইমআউট সেট করা হচ্ছে
-            setTimeout(() => {
-                if (window[callbackName]) {
-                    // যদি ৪৫ সেকেন্ড পর উত্তর না আসে
-                    delete window[callbackName];
-                    document.body.removeChild(iframe);
-                    document.body.removeChild(form);
-                    reject(new Error("Request timed out. The server might be busy or there's a network issue."));
-                }
-            }, 45000); // ৪৫ সেকেন্ড
-
-            // ফর্ম সাবমিট করা হচ্ছে
-            form.submit();
-            
         } catch (error) {
-            reject(error);
+            console.error("File to Base64 conversion error:", error);
+            window.showToast('Failed to read the image file.', 'error');
+            resetPreview();
         }
-    });
-}
+    };
 
- 
-
-// ==========================================================
-// ||       UPDATED callGeminiAPI FUNCTION                 ||
-// ==========================================================
-// এই ফাংশনটি এখন শুধুমাত্র একটি Wrapper হিসেবে কাজ করবে
-
- const callGeminiAPI = async (prompt, imageBase64Data_unused, expectJson = true) => {
-    console.log("Resizing image before sending to Gemini API...");
-    if (!originalImageSrcForEnhance) throw new Error("Original image source is missing.");
-
-    // ছবিটি রিসাইজ করা হচ্ছে
-    const imageBlobForApi = await resizeImageForApi(originalImageSrcForEnhance, 1024);
-    
-    // রিসাইজ করা ছবিকে base64-এ রূপান্তর করা হচ্ছে
-    const imageBase64Data = await toBase64(imageBlobForApi);
-
-    console.log("Calling Vercel proxy for Gemini...");
-
-    // Vercel proxy-কে কল করা হচ্ছে
-    const response = await fetch('/api/proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            api: "gemini",
-            prompt: prompt,
-            base64Data: imageBase64Data,
-            expectJson: expectJson
-        })
-    });
-
-    if (!response.ok) {
-        const errorResult = await response.json();
-        throw new Error(errorResult.error || `Server error: ${response.status}`);
-    }
-
-    const result = await response.json();
-    const textContent = result.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!textContent) throw new Error("Invalid API response structure from server.");
-
-    if (expectJson) {
-        try {
-            const jsonMatch = textContent.match(/```json\s*([\s\S]*?)\s*```|({[\s\S]*})/);
-            if (!jsonMatch) throw new Error("No JSON object found in API response.");
-            return JSON.parse(jsonMatch[1] || jsonMatch[2]);
-        } catch(e) {
-             throw new Error("AI response was not valid JSON. " + e.message);
+    const resetPreview = () => {        
+        const uploadPreview = document.getElementById('uploadPreview');
+        const uploadPreviewImage = document.getElementById('uploadPreviewImage');
+        if (uploadPreview) {
+            uploadPreview.classList.add('hidden');
+            if (uploadPreviewImage) uploadPreviewImage.src = '';
         }
-    } else {
-        return textContent;
-    }
-};
-      
-        const handleAnalyze = async () => {
-            if (!imageBase64) { if (window.showToast) window.showToast('An image is required for analysis.', 'error'); return; }
-            if (loadingText) loadingText.textContent = 'Analyzing Image...';
-            if (initialState) initialState.classList.add('hidden');
-            if (resultsContent) resultsContent.classList.add('hidden');
-            if (loadingState) loadingState.classList.remove('hidden');
-            const promptText = `Analyze the provided image for a comprehensive, professional-level aesthetic and technical review. Output ONLY a valid JSON object. Do not include any explanatory text before or after the JSON. The JSON object should have the following structure: { "aestheticScore": <number from 0-100 for overall appeal>, "scoreBreakdown": { "lighting": <number 0-100>, "composition": <number 0-100>, "sharpness": <number 0-100>, "colorHarmony": <number 0-100>, "subjectFocus": <number 0-100> }, "tags": ["<up to 25 concise tags>"], "qualityInsights": { "compositionQuality": "<'Poor'|'Fair'|'Good'|'Excellent'>", "brightness": "<'Underexposed'|'Balanced'|'Overexposed'>", "contrast": "<'Low'|'Medium'|'High'>", "noiseLevel": "<'Low'|'Moderate'|'High'>", "subjectClarity": "<'Blurry'|'Soft'|'Sharp'>", "overallImpression": "<Briefly, e.g., 'Snapshot feel'>" }, "enhancementSuggestions": [ { "adjustment": "<e.g., 'Increase brightness by +10', 'Reduce saturation by -15', 'Sharpen image'>", "reason": "<why this will improve the image>" } ] } Ensure all numeric scores are integers. For adjustments, if a numeric value is implied, include it with its sign (e.g., +10, -15).`;
-            try {
-                const parsedData = await callGeminiAPI(promptText, imageBase64);
-                
-                 if (currentFileObject) {
-                    logUserAction('analyze_image', { 
-                        filename: currentFileObject.name, 
-                        filesize: currentFileObject.size 
-                    });
-                }
-              
-                displayAnalysisResults(parsedData);
-                if (window.showToast) window.showToast('Analysis complete!', 'success');
-            } catch (error) {
-                console.error('Analysis failed:', error);
-                if (window.showToast) window.showToast(`Analysis failed: ${error.message}`, 'error');
-                if (loadingState) loadingState.classList.add('hidden');
-                if (!analysisResults && initialState) initialState.classList.remove('hidden');
-                else if (resultsContent) resultsContent.classList.remove('hidden');
-            }
-        };
-        const formatBytes = (bytes, decimals = 2) => {
-            if (!bytes || bytes === 0) return '0 Bytes';
-            const k = 1024;
-            const dm = decimals < 0 ? 0 : decimals;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-        }
-        const displayImageTechProperties = () => {
-            const fileNameEl = document.getElementById('tech-prop-filename');
-            const dimensionsEl = document.getElementById('tech-prop-dimensions');
-            const filesizeEl = document.getElementById('tech-prop-filesize');
-            const filetypeEl = document.getElementById('tech-prop-filetype');
-            const hFileNameEl = document.getElementById('hover-tech-prop-filename');
-            const hDimensionsEl = document.getElementById('hover-tech-prop-dimensions');
-            const hFilesizeEl = document.getElementById('hover-tech-prop-filesize');
-            const hFiletypeEl = document.getElementById('hover-tech-prop-filetype');
+        
+        if (uploadBox) uploadBox.classList.remove('hidden');
+        if (imagePreviewContainer) imagePreviewContainer.classList.add('hidden');
+        const placeholderSvg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect width='100%25' height='100%25' fill='%23222b3a'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='gray' font-size='24'%3ENo Image%3C/text%3E%3C/svg%3E";
+        if (imagePreview) imagePreview.src = placeholderSvg;
+        
+        if (beforeImageSlider) beforeImageSlider.src = '';
+        if (afterImageSlider) afterImageSlider.src = '';
 
-            const setValues = (els, values) => {
-                if (!els) return;
-                els.forEach((el, idx) => {
-                    if (el) el.textContent = values[idx];
-                });
+        imageBase64 = ''; originalImageSrcForEnhance = ''; enhancedImageSrcForEnhance = '';
+        currentFileObject = null; currentImageDimensions = { width: 0, height: 0 };
+        analysisResults = null; enhancementSuggestionsData = null; currentMetadata = null;
+        currentUploadedFileName = '';
+        currentRecentFileCacheKey = null;
+        if (resultsContent) resultsContent.classList.add('hidden');
+        if (initialState) initialState.classList.remove('hidden');
+        if (loadingState) loadingState.classList.add('hidden');
+        setProgress(0);
+        if (scoreBreakdown) scoreBreakdown.innerHTML = '';
+        if (tagsContainer) tagsContainer.innerHTML = '';
+        if (qualityInsights) qualityInsights.innerHTML = '';
+        if (imageUrlInput) imageUrlInput.value = '';
+        if (imageUpload) imageUpload.value = ''; 
+        updateUI();
+    };
+
+    const displayAnalysisResults = (data) => {
+        analysisResults = data;
+        setProgress(data.aestheticScore || 0);
+
+        if (scoreBreakdown) {
+            scoreBreakdown.innerHTML = '';
+            const breakdownItems = data.scoreBreakdown || {};
+            const breakdownIcons = { lighting: 'ph-sun', composition: 'ph-grid-four', sharpness: 'ph-selection-background', colorHarmony: 'ph-palette', subjectFocus: 'ph-user-focus' };
+            Object.entries(breakdownItems).forEach(([key, value]) => {
+                const iconClass = breakdownIcons[key] || 'ph-question';
+                const displayName = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                scoreBreakdown.innerHTML += `<div class="flex items-center justify-between text-sm"><div class="flex items-center gap-2"><i class="${iconClass} text-sky-400"></i><span class="text-gray-300">${displayName}</span></div><span class="font-semibold text-white">${value}/100</span></div>`;
+            });
+        }
+
+        if (tagsContainer) {
+             tagsContainer.innerHTML = '';
+             (data.tags || []).forEach(tag => { tagsContainer.innerHTML += `<span class="bg-gray-700 text-gray-200 text-xs font-medium px-2.5 py-1 rounded-full">${tag}</span>`; });
+        }
+
+        if (qualityInsights) {
+            qualityInsights.innerHTML = '';
+            const insights = data.qualityInsights || {};
+            const qualityIcons = {
+                compositionQuality: { 'Excellent': 'ph-fill ph-star-four text-green-400', 'Good': 'ph-fill ph-thumbs-up text-sky-400', 'Fair': 'ph-fill ph-warning-circle text-yellow-400', 'Poor': 'ph-fill ph-x-circle text-red-400' },
+                brightness: { 'Balanced': 'ph-fill ph-check-circle text-green-400', 'Underexposed': 'ph-fill ph-warning text-yellow-400', 'Overexposed': 'ph-fill ph-warning text-yellow-400' },
+                contrast: { 'High': 'ph-fill ph-arrow-up text-sky-400', 'Medium': 'ph-fill ph-minus-circle text-gray-400', 'Low': 'ph-fill ph-arrow-down text-yellow-400' },
+                noiseLevel: { 'Low': 'ph-fill ph-check-circle text-green-400', 'Moderate': 'ph-fill ph-warning-circle text-yellow-400', 'High': 'ph-fill ph-warning text-red-400' },
+                subjectClarity: { 'Sharp': 'ph-fill ph-check-circle text-green-400', 'Soft': 'ph-fill ph-warning-circle text-yellow-400', 'Blurry': 'ph-fill ph-x-circle text-red-400' },
+                overallImpression: 'ph-chat-circle-text text-gray-400'
             };
-
-            if (!currentFileObject) {
-                setValues([fileNameEl, dimensionsEl, filesizeEl, filetypeEl], ['N/A','N/A','N/A','N/A']);
-                setValues([hFileNameEl, hDimensionsEl, hFilesizeEl, hFiletypeEl], ['N/A','N/A','N/A','N/A']);
-                if (fileNameEl) fileNameEl.title = 'N/A';
-                return;
-            }
-
-            const nameVal = currentUploadedFileName || 'N/A';
-            const dimVal = `${currentImageDimensions.width} x ${currentImageDimensions.height} px`;
-            const sizeVal = formatBytes(currentFileObject.size);
-            const typeVal = currentFileObject.type || 'N/A';
-
-            setValues([fileNameEl, hFileNameEl], [nameVal, nameVal]);
-            if (fileNameEl) fileNameEl.title = nameVal;
-            setValues([dimensionsEl, hDimensionsEl], [dimVal, dimVal]);
-            setValues([filesizeEl, hFilesizeEl], [sizeVal, sizeVal]);
-            setValues([filetypeEl, hFiletypeEl], [typeVal, typeVal]);
-        };
-        const handleEnhance = async () => {
-            if (!imageBase64) { if (window.showToast) window.showToast('An image is required.', 'error'); return; }
-            if (!window.isOpenCvReady) { if (window.showToast) window.showToast('Enhancement engine (OpenCV) is not ready. Please wait.', 'info'); return; }
-            displayEnhanceResults({ suggestions: [] }); 
-            displayImageTechProperties();
-            if (window.showToast) window.showToast('Opened Enhancement Panel. Generate suggestions or adjust manually.', 'info');
-            const selectedPromptType = enhancePromptTypeDropdown.value;
-            let promptForEnhancement = '';
-            const knownAdjustments = "Brightness, Contrast, Exposure, Shadows, Highlights, Saturation, Vibrance, Temperature, Tint, Sharpen, Denoise, Vignette";
-            const commonPromptSuffix = ` For each suggestion, provide a precise adjustment string using ONLY terms from this list: [${knownAdjustments}], followed by a numeric value with its sign if applicable (e.g., 'Increase Brightness by +10', 'Reduce Saturation by -15', 'Adjust Temperature by +5'). If a numeric value is not naturally part of a listed adjustment (e.g., 'Sharpen image', 'Denoise'), state the adjustment simply using only the listed terms. Output ONLY the valid JSON object: {"suggestions": [{"adjustment": "string", "reason": "string"}]}`;
-            switch (selectedPromptType) {
-                case 'microstock': promptForEnhancement = `You are a meticulous AI image quality inspector for microstock sites. Identify technical flaws: Lighting, Contrast, Shadow, Focus, Color Balance, Noise/Artifacts. If flaws exist, provide actionable suggestions. If no sound, return empty suggestions. ${commonPromptSuffix}`; break;
-                case 'aesthetic': promptForEnhancement = `Analyze the image for overall visual appeal. Suggest 3-5 enhancements for color, light, clarity, composition. ${commonPromptSuffix}`; break;
-                case 'artistic': promptForEnhancement = `This is an artistic image. Suggest 3-4 enhancements for artistic impact (mood, color harmony, texture, creative effects). Avoid making it look like a standard photo. ${commonPromptSuffix}`; break;
-                case 'fix_common': promptForEnhancement = `Assume this image is by an amateur. Look for common mistakes (exposure, contrast, focus, dull colors). Provide 2-3 simple fixes. ${commonPromptSuffix}`; break;
-                default: if (window.showToast) window.showToast('Invalid enhancement mode selected.', 'error'); return;
-            }
-            if (enhanceSuggestions) enhanceSuggestions.innerHTML = `<p class="text-gray-400 flex items-center gap-2"><i class="ph ph-spinner animate-spin text-2xl mr-2"></i>Generating suggestions...</p>`;
-            try {
-                const parsedData = await callGeminiAPI(promptForEnhancement, imageBase64, true);
-                displayEnhanceResults(parsedData);
-                displayImageTechProperties(); 
-            } catch (error) {
-                console.error('Enhancement suggestions failed:', error);
-                if (window.showToast) window.showToast(`Enhancement suggestions failed: ${error.message}`, 'error');
-                 if (enhanceSuggestions) enhanceSuggestions.innerHTML = `<p class="text-red-400">Failed to get suggestions. You can still use manual controls.</p>`;
-            }
-        };
-       // --- নতুন কোড (এটি পেস্ট করুন) ---
-        const copyToClipboard = (text, type = 'Text') => {
-      // আধুনিক navigator.clipboard API ব্যবহার করা হচ্ছে
-       if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(text).then(() => {
-            if (window.showToast) window.showToast(`${type} copied to clipboard!`);
-        }).catch(err => {
-            if (window.showToast) window.showToast(`Failed to copy ${type}.`, 'error');
-            console.error('Async clipboard copy failed:', err);
-        });
-    } else {
-        // পুরোনো ব্রাউজারের জন্য ফলব্যাক পদ্ধতি
-        const tempTextArea = document.createElement('textarea');
-        tempTextArea.style.position = 'absolute';
-        tempTextArea.style.left = '-9999px';
-        tempTextArea.value = text;
-        document.body.appendChild(tempTextArea);
-        tempTextArea.select();
-        try {
-            document.execCommand('copy');
-            if (window.showToast) window.showToast(`${type} copied to clipboard!`);
-        } catch (err) {
-            if (window.showToast) window.showToast(`Failed to copy ${type}.`, 'error');
-            console.error('Fallback clipboard copy failed:', err);
+            Object.entries(insights).forEach(([key, value]) => {
+                let iconClass = 'ph-info text-gray-400';
+                if (qualityIcons[key]) {
+                    if (typeof qualityIcons[key] === 'string') {
+                        iconClass = qualityIcons[key];
+                    } else if (qualityIcons[key][value]) {
+                        iconClass = qualityIcons[key][value];
+                    }
+                }
+                const displayName = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                qualityInsights.innerHTML += `<div class="flex justify-between items-center mb-2 text-sm"><span class="font-medium text-gray-300">${displayName}</span><div class="flex items-center gap-2 font-semibold"><i class="${iconClass} text-lg"></i><span class="text-white">${value}</span></div></div>`;
+            });
         }
-        document.body.removeChild(tempTextArea);
-    }
-};
-        const updateEnhancedImage = (dataUrl) => {
-            enhancedImageSrcForEnhance = dataUrl;
-            if (afterImageSlider) afterImageSlider.src = dataUrl;
-            if (imageCompareSlider) {
-                imageCompareSlider.value = 100;
-                imageCompareSlider.dispatchEvent(new Event('input'));
-            }
-        };
-                const handleImageUrlInput = async () => {
-            if (!imageUrlInput) return;
-            const url = imageUrlInput.value.trim();
-            if (!url) {
-                if (window.showToast) window.showToast('Please enter an image URL.', 'info');
-                return;
-            }
 
-            // একটি ফ্রি CORS প্রক্সি ব্যবহার করা হচ্ছে
-            const proxyUrl = 'https://api.allorigins.win/raw?url=';
-            const fetchUrl = proxyUrl + encodeURIComponent(url);
-            
-            const filename = url.substring(url.lastIndexOf('/') + 1).split('?')[0] || "image_from_url.jpg";
-            if (uploadBox) uploadBox.classList.add('hidden');
-            if (imagePreviewContainer) imagePreviewContainer.classList.remove('hidden');
-            if (imagePreview) imagePreview.src = ''; // লোডিং এর জন্য প্রিভিউ ক্লিয়ার করা হচ্ছে
+        if (resultsContent) resultsContent.classList.remove('hidden');
+        if (initialState) initialState.classList.add('hidden');
+        if (loadingState) loadingState.classList.add('hidden');
+    };
+    
+    // --- API Call Functions ---
 
-            try {
-                // সরাসরি URL এর পরিবর্তে প্রক্সি URL দিয়ে fetch করা হচ্ছে
-                const response = await fetch(fetchUrl);
-                if (!response.ok) throw new Error(`Failed to fetch image via proxy: ${response.status} ${response.statusText}`);
-                
-                const blob = await response.blob();
-                if (!blob.type.startsWith('image/')) throw new Error('Fetched content is not a valid image type.');
-                
-                const file = new File([blob], filename, { type: blob.type });
-                await handleFileSelect(file);
-                imageUrlInput.value = '';
-            } catch (error) {
-                console.error("Error fetching image from URL:", error);
-                if (window.showToast) window.showToast(`Failed to load image from URL: ${error.message}. Check CORS.`, 'error');
-                resetPreview();
-            }
-        };
-        const handleGetMetadata = async () => {
-            if (!imageBase64) { if (window.showToast) window.showToast('An image is required.', 'error'); return; }
-            if (metadataContent) metadataContent.innerHTML = `<div class="flex items-center justify-center text-gray-400"><i class="ph ph-spinner animate-spin text-2xl mr-2"></i>Generating metadata...</div>`;
-            if (metadataModal) metadataModal.classList.remove('hidden');
-            const thumb = document.getElementById('metadataThumb');
-            const fileNameDiv = document.getElementById('metadataFileName');
-            if (thumb) thumb.src = originalImageSrcForEnhance || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Crect width='100%25' height='100%25' fill='%23222b3a'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='gray' font-size='18'%3ENo Image%3C/text%3E%3C/svg%3E";
-            if (fileNameDiv) fileNameDiv.textContent = currentUploadedFileName;
-            const promptText = `Analyze the image and generate SEO-friendly metadata. Provide ONLY a valid JSON object with the keys: 'fileName', 'title', and 'keywords' (as an array of strings). Use the original image's characteristics. Example: {"fileName": "red-rose-with-dew-drops.jpg", "title": "Vibrant Red Rose Covered in Morning Dew | Macro Photography", "keywords": ["red rose", "flower", "macro", "dew drops", "nature", "romance", "beauty"]}`;
-            try { const data = await callGeminiAPI(promptText, imageBase64, true); currentMetadata = data;  logUserAction('generate_metadata', {
-                    filename: currentUploadedFileName
-                }); displayMetadata(data); } 
-            catch (error) { console.error('Metadata generation failed:', error); if (window.showToast) window.showToast(`Metadata generation failed: ${error.message}`, 'error'); if (metadataContent) metadataContent.innerHTML = `<p class="text-red-400">Failed to generate metadata.</p>`; }
-        };
-        const displayMetadata = (data) => {
-            if (!metadataContent) return; const { fileName, title, keywords } = data;
-            const createRow = (label, value) => `<div class="flex items-start justify-between gap-4"><div class="flex-1"><label class="block text-sm font-semibold text-gray-400 mb-1">${label}</label><p class="text-gray-200 bg-gray-900/50 p-2 rounded-md text-sm">${value}</p></div><button class="copy-metadata-btn mt-7 bg-sky-700 hover:bg-sky-600 text-white font-semibold px-3 py-1.5 rounded-lg transition-colors text-xs flex items-center gap-1.5" data-text="${value}" data-type="${label}"><i class="ph ph-copy"></i> Copy</button></div>`;
-            metadataContent.innerHTML = `${createRow('File Name', fileName || currentUploadedFileName || 'N/A')}${createRow('Title', title || 'N/A')}${createRow('Keywords', (keywords || []).join(', '))}`;
-        };
-        const handleGetPrompt = async () => {
-            if (!imageBase64) { if (window.showToast) window.showToast('An image is required.', 'error'); return; }
-            if (promptContent) promptContent.textContent = 'Generating prompt...'; if (promptModal) promptModal.classList.remove('hidden');
-            const thumb = document.getElementById('promptThumb');
-            const fileNameDiv = document.getElementById('promptFileName');
-            if (thumb) thumb.src = originalImageSrcForEnhance || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Crect width='100%25' height='100%25' fill='%23222b3a'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='gray' font-size='18'%3ENo Image%3C/text%3E%3C/svg%3E";
-            if (fileNameDiv) fileNameDiv.textContent = currentUploadedFileName;
-            const promptText = `Describe the provided image in vivid detail, as if you were creating a prompt for an AI image generator like Midjourney or DALL-E. Capture the subject, style, lighting, composition, and mood. Provide ONLY the text of the prompt, without any extra formatting, labels, or quotation marks.`;
-            try { const data = await callGeminiAPI(promptText, imageBase64, false); displayPrompt(data); } 
-            catch(error) { console.error('Prompt generation failed:', error); if (window.showToast) window.showToast(`Prompt generation failed: ${error.message}`, 'error'); if (promptContent) promptContent.textContent = `Failed to generate prompt.`; }
-        };
-        const displayPrompt = (promptText) => { if (promptContent) promptContent.textContent = promptText; };
-        const exportMetadataAsCsv = () => {
-            if (!currentMetadata) { if (window.showToast) window.showToast('No metadata to export.', 'error'); return; }
-            const { fileName, title, keywords } = currentMetadata;
-            const escapeCsvCell = (cell) => { const strCell = String(cell || ''); if (strCell.includes(',') || strCell.includes('"') || strCell.includes('\n')) { return `"${strCell.replace(/"/g, '""')}"`; } return strCell; };
-            const headers = ['File Name', 'Title', 'Keywords']; const row = [escapeCsvCell(fileName || currentUploadedFileName), escapeCsvCell(title), escapeCsvCell((keywords || []).join(', '))];
-            const csvContent = "data:text/csv;charset=utf-8," + headers.join(',') + '\n' + row.join(',');
-            const encodedUri = encodeURI(csvContent); const link = document.createElement("a"); link.setAttribute("href", encodedUri); link.setAttribute("download", "metadata.csv"); document.body.appendChild(link); link.click(); document.body.removeChild(link); if(window.showToast) window.showToast('Metadata exported as CSV.');
-        };
-        const applyManualEnhancements = () => {
-            if (!window.isOpenCvReady || !originalImageSrcForEnhance) return;
-            let img = new Image();
+    const resizeImageForApi = (imageUrl, maxDimension) => {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
             img.crossOrigin = "Anonymous";
             img.onload = () => {
-                let src = null, dst = null;
-                try {
-                    src = cv.imread(img);
-                    if (src.empty()) throw new Error('Failed to read original image for manual enhancement.');
-                    dst = src.clone();
-                    let exposureValue = parseFloat(document.getElementById('slider-exposure').value) || 0;
-                    let brightnessValue = parseFloat(document.getElementById('slider-brightness').value) || 0;
-                    let contrastValue = parseFloat(document.getElementById('slider-contrast').value) || 0;
-                    let saturationValue = parseFloat(document.getElementById('slider-saturation').value) || 0;
-                    let temperatureValue = parseFloat(document.getElementById('slider-temperature').value) || 0;
-                    let vibranceValue = parseFloat(document.getElementById('slider-vibrance').value) || 0;
-                    let blurSharpenValue = parseFloat(document.getElementById('slider-blur').value) || 0;
-                    let highlightsValue = parseFloat(document.getElementById('slider-highlights').value) || 0;
-                    let shadowsValue = parseFloat(document.getElementById('slider-shadows').value) || 0;
-                    let vignetteValue = parseFloat(document.getElementById('slider-vignette').value) || 0;
-                    let denoiseValue = parseFloat(document.getElementById('slider-denoise').value) || 0;
-                    if (exposureValue !== 0 || brightnessValue !== 0 || contrastValue !== 0) {
-                        let alpha = 1.0 + contrastValue / 100.0;
-                        let beta = brightnessValue;
-                        let exposureFactor = Math.pow(2, exposureValue / 100.0);
-                        dst.convertTo(dst, -1, alpha * exposureFactor, beta);
-                    }
-                    if (highlightsValue !== 0 || shadowsValue !== 0) {
-                        let lab = new cv.Mat();
-                        cv.cvtColor(dst, lab, cv.COLOR_RGB2Lab);
-                        let lab_planes = new cv.MatVector();
-                        cv.split(lab, lab_planes);
-                        let L = lab_planes.get(0);
-                        let l_channel = new cv.Mat(L.rows, L.cols, L.type());
-                        L.copyTo(l_channel);
-                        let shadowFactor = shadowsValue / 100.0;
-                        let highlightFactor = -highlightsValue / 100.0;
-                        for (let i = 0; i < l_channel.rows; i++) {
-                            for (let j = 0; j < l_channel.cols; j++) {
-                                let pixel = l_channel.ucharPtr(i, j)[0];
-                                let newPixel = pixel;
-                                if (shadowsValue !== 0) {
-                                    let shadowAdj = shadowFactor > 0 ? (Math.pow(255 - pixel, 0.5) * shadowFactor * 5) : (Math.pow(pixel, 0.5) * shadowFactor * 5);
-                                    newPixel += shadowAdj;
-                                }
-                                if (highlightsValue !== 0) {
-                                    let highlightAdj = highlightFactor < 0 ? (Math.pow(pixel, 0.5) * highlightFactor * 5) : (Math.pow(255 - pixel, 0.5) * highlightFactor * 5);
-                                     newPixel += highlightAdj;
-                                }
-                                l_channel.ucharPtr(i, j)[0] = Math.max(0, Math.min(255, newPixel));
-                            }
-                        }
-                        lab_planes.set(0, l_channel);
-                        cv.merge(lab_planes, lab);
-                        cv.cvtColor(lab, dst, cv.COLOR_Lab2RGB);
-                        l_channel.delete(); lab.delete(); lab_planes.delete();
-                    }
-                    if (saturationValue !== 0 || vibranceValue !== 0 || temperatureValue !== 0) {
-                        let hsv = new cv.Mat();
-                        cv.cvtColor(dst, hsv, cv.COLOR_RGB2HSV);
-                        let hsv_planes = new cv.MatVector();
-                        cv.split(hsv, hsv_planes);
-                        let s = hsv_planes.get(1);
-                        if (saturationValue !== 0 || vibranceValue !== 0) {
-                             let sat_alpha = 1.0 + saturationValue / 100.0;
-                             let vibranceFactor = vibranceValue / 100.0;
-                             for (let i = 0; i < s.rows; i++) {
-                                for (let j = 0; j < s.cols; j++) {
-                                    let sat_pixel = s.ucharPtr(i,j)[0];
-                                    let new_sat = sat_pixel * sat_alpha;
-                                    let adjustment = vibranceFactor * (255 - new_sat);
-                                    s.ucharPtr(i, j)[0] = Math.max(0, Math.min(255, Math.round(new_sat + adjustment)));
-                                }
-                            }
-                        }
-                        cv.merge(hsv_planes, hsv);
-                        cv.cvtColor(hsv, dst, cv.COLOR_HSV2RGB);
-                        hsv.delete(); hsv_planes.delete(); s.delete();
-                        if (temperatureValue !== 0) {
-                            let bgr_planes = new cv.MatVector();
-                            cv.split(dst, bgr_planes);
-                            let b = bgr_planes.get(0);
-                            let r = bgr_planes.get(2);
-                            let adjustment_mat = cv.Mat.ones(dst.rows, dst.cols, b.type());
-                            if (temperatureValue > 0) { 
-                                adjustment_mat.convertTo(adjustment_mat, -1, temperatureValue / 2.55, 0);
-                                cv.add(r, adjustment_mat, r);
-                            } else { 
-                                adjustment_mat.convertTo(adjustment_mat, -1, -temperatureValue / 2.55, 0);
-                                cv.add(b, adjustment_mat, b);
-                            }
-                            cv.merge(bgr_planes, dst);
-                            bgr_planes.delete(); b.delete(); r.delete(); adjustment_mat.delete();
-                        }
-                    }
-                    if (blurSharpenValue > 0) {
-                        let blurred = new cv.Mat();
-                        let amount = blurSharpenValue / 100.0;
-                        cv.GaussianBlur(dst, blurred, new cv.Size(0, 0), 3, 0, cv.BORDER_DEFAULT);
-                        cv.addWeighted(dst, 1.0 + amount, blurred, -amount, 0, dst);
-                        blurred.delete();
-                    } else if (blurSharpenValue < 0) {
-                        let kernelSize = Math.floor(Math.abs(blurSharpenValue) / 10) * 2 + 1;
-                        cv.GaussianBlur(dst, dst, new cv.Size(kernelSize, kernelSize), 0, 0, cv.BORDER_DEFAULT);
-                    }
-                    if (denoiseValue > 0 && cv.photo && cv.photo.fastNlMeansDenoisingColored) {
-                        let hDenoise = denoiseValue * 0.3;
-                        cv.photo.fastNlMeansDenoisingColored(dst, dst, hDenoise, 10, 7, 21);
-                    }
-                    if (vignetteValue > 0) {
-                        let kernelX = cv.getGaussianKernel(dst.cols, vignetteValue * 2);
-                        let kernelY = cv.getGaussianKernel(dst.rows, vignetteValue * 2);
-                        let kernel = new cv.Mat();
-                        cv.multiply(kernelY, kernelX.t(), kernel, 1, cv.CV_32F);
-                        let mask = new cv.Mat();
-                        cv.normalize(kernel, mask, 0, 1, cv.NORM_MINMAX);
-                        let channels = new cv.MatVector();
-                        cv.split(dst, channels);
-                        for (let i = 0; i < channels.size(); i++) {
-                            let channel32f = new cv.Mat();
-                            channels.get(i).convertTo(channel32f, cv.CV_32F);
-                            cv.multiply(channel32f, mask, channel32f);
-                            channel32f.convertTo(channels.get(i), cv.CV_8U);
-                            channel32f.delete();
-                        }
-                        cv.merge(channels, dst);
-                        kernelX.delete(); kernelY.delete(); kernel.delete(); mask.delete(); channels.delete();
-                    }
-                    cv.imshow(enhancedImagePreviewCanvas, dst);
-                    updateEnhancedImage(enhancedImagePreviewCanvas.toDataURL('image/jpeg'));
-                } catch (e) { 
-                    console.error("OpenCV Error applying manual enhancements:", e); 
-                    if(window.showToast) window.showToast('Failed to apply manual adjustments. Check console.', 'error');
-                } finally {
-                    if (src) src.delete();
-                    if (dst) dst.delete();
-                }
-            };
-            img.src = originalImageSrcForEnhance;
-        };
-        const applySuggestion = (suggestion) => {
-            console.log("Applying suggestion:", suggestion);
-            try {
-                if (!window.isOpenCvReady || !originalImageSrcForEnhance) { 
-                    if (window.showToast) window.showToast('Enhancement engine not ready or no image loaded.', 'error'); return; 
-                }
-                const adjustmentText = suggestion.adjustment.toLowerCase();
-                const getAdjustmentValue = (adjString, defaultValue = 0) => { const match = adjString.match(/(-?\+?\d+\.?\d*)/); return match ? parseFloat(match[0]) : defaultValue; };
-                let value = getAdjustmentValue(suggestion.adjustment); 
-                const applyViaSlider = (sliderId, changeAmount, defaultChange = 15) => {
-                    const slider = document.getElementById(sliderId);
-                    const valDisplay = document.getElementById(`sliderVal-${sliderId.split('-')[1]}`);
-                    if (slider && valDisplay) {
-                        let actualChange = changeAmount;
-                        if (changeAmount === 0 && (adjustmentText.includes('increase') || adjustmentText.includes('boost'))) actualChange = defaultChange;
-                        else if (changeAmount === 0 && (adjustmentText.includes('decrease') || adjustmentText.includes('reduce'))) actualChange = -defaultChange;
-                        slider.value = actualChange;
-                        slider.value = Math.max(parseFloat(slider.min), Math.min(parseFloat(slider.max), slider.value));
-                        valDisplay.textContent = slider.value;
-                        applyManualEnhancements();
-                    }
-                };
-                if (adjustmentText.includes('brightness')) { applyViaSlider('slider-brightness', value, 10); } 
-                else if (adjustmentText.includes('contrast')) { applyViaSlider('slider-contrast', value, 10); } 
-                else if (adjustmentText.includes('saturation')) { applyViaSlider('slider-saturation', value, 15); } 
-                else if (adjustmentText.includes('highlight')) { applyViaSlider('slider-highlights', value, 15); }
-                else if (adjustmentText.includes('shadow')) { applyViaSlider('slider-shadows', value, 15); }
-                else if (adjustmentText.includes('exposure')) { applyViaSlider('slider-exposure', value, 10); }
-                else if (adjustmentText.includes('temperature')) { applyViaSlider('slider-temperature', value, 10); }
-                else if (adjustmentText.includes('vibrance')) { applyViaSlider('slider-vibrance', value, 15); }
-                else if (adjustmentText.includes('vignette')) { applyViaSlider('slider-vignette', value, 10); }
-                else if (adjustmentText.includes('denoise')) { applyViaSlider('slider-denoise', value !== 0 ? value : 20, 20); } 
-                else if (adjustmentText.includes('sharpen')) { applyViaSlider('slider-blur', value !== 0 ? value : 20, 20); } 
-                else {
-                    window.showToast(`AI suggested: "${suggestion.adjustment}". Please use manual sliders.`, 'info');
+                const { naturalWidth: width, naturalHeight: height } = img;
+                if (width <= maxDimension && height <= maxDimension) {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    canvas.getContext('2d').drawImage(img, 0, 0);
+                    canvas.toBlob(resolve, 'image/jpeg', 0.95);
                     return;
                 }
-                window.showToast('Enhancement applied!', 'success');
-            } catch (e) { 
-                console.error("Error in applySuggestion wrapper:", e); 
-                window.showToast('An unexpected error occurred while applying suggestion.', 'error'); 
-            }
-        };
-        const handleRecheckImage = async () => {
-              if (!enhancedImagePreviewCanvas || enhancedImagePreviewCanvas.width === 0) {
-                  window.showToast('No enhanced image to re-check. Apply some changes first.', 'info');
-             return;
-             }
-            
-             const enhancedImageBase64 = enhancedImagePreviewCanvas.toDataURL('image/jpeg').split(',')[1];
-            if (enhanceSuggestions) {
-                enhanceSuggestions.innerHTML = `<p class="text-gray-400 flex items-center gap-2"><i class="ph ph-spinner animate-spin"></i> Re-checking image for issues...</p>`;
-            }
-            if (recheckImageBtn) recheckImageBtn.disabled = true;
-            const selectedPromptType = enhancePromptTypeDropdown.value;
-            let promptForRecheck = '';
-            const knownAdjustments = "Brightness, Contrast, Exposure, Shadows, Highlights, Saturation, Vibrance, Temperature, Tint, Sharpen, Denoise, Vignette";
-            const commonPromptSuffix = ` For each suggestion, provide a precise adjustment string using ONLY terms from this list: [${knownAdjustments}], followed by a numeric value with its sign if applicable (e.g., 'Increase Brightness by +10', 'Reduce Saturation by -15', 'Adjust Temperature by +5'). If a numeric value is not naturally part of a listed adjustment (e.g., 'Sharpen image', 'Denoise'), state the adjustment simply using only the listed terms. If the image is technically sound and has no obvious flaws for the given mode, return an empty "suggestions" array. Output ONLY the valid JSON object: {"suggestions": [{"adjustment": "string", "reason": "string"}]}`;
-            switch (selectedPromptType) {
-                case 'microstock': promptForRecheck = `You are a meticulous AI image quality inspector for microstock sites. Identify technical flaws: Lighting, Contrast, Shadow, Focus, Color Balance, Noise/Artifacts. If flaws exist, provide actionable suggestions. ${commonPromptSuffix}`; break;
-                case 'aesthetic': promptForRecheck = `Analyze the image for overall visual appeal. Suggest 3-5 enhancements for color, light, clarity, composition. ${commonPromptSuffix}`; break;
-                case 'artistic': promptForRecheck = `This is an artistic image. Suggest 3-4 enhancements for artistic impact (mood, color harmony, texture, creative effects). Avoid making it look like a standard photo. ${commonPromptSuffix}`; break;
-                case 'fix_common': promptForRecheck = `Assume this image is by an amateur. Look for common mistakes (exposure, contrast, focus, dull colors). Provide 2-3 simple fixes. ${commonPromptSuffix}`; break;
-                default: window.showToast('Invalid enhancement mode selected.', 'error'); if(recheckImageBtn) recheckImageBtn.disabled = false; return;
-            }
-            try {
-                const parsedData = await callGeminiAPI(promptForRecheck, enhancedImageBase64, true);
-                enhancementSuggestionsData = parsedData.suggestions; 
-                if (enhancementSuggestionsData && enhancementSuggestionsData.length > 0) {
-                     window.showToast('Found more areas for improvement!', 'info');
-                     enhanceSuggestions.innerHTML = enhancementSuggestionsData.map((item, index) => `
-                        <button data-suggestion-index="${index}" class="suggestion-btn w-full text-left p-3 bg-gray-900/50 rounded-lg border border-gray-700 hover:bg-gray-800 hover:border-sky-500 transition-all focus:outline-none focus:ring-2 focus:ring-sky-500">
-                            <div class="flex items-center"><div class="flex-grow"><p class="font-semibold text-white mb-1">${item.adjustment}</p><p class="text-gray-400 text-xs">${item.reason}</p></div><span class="applied-indicator text-green-400 text-xl ml-2"></span></div></button>`).join('');
-                } else {
-                    window.showToast('Re-check complete. Image looks great!', 'success');
-                    enhanceSuggestions.innerHTML = `<div class="flex items-center gap-3 p-3 rounded-lg bg-green-900/50 border border-green-700 text-green-300">
-                        <i class="ph-fill ph-check-circle text-2xl"></i>
-                        <div>
-                            <p class="font-semibold">All Clear!</p>
-                            <p class="text-xs">The AI found no further issues for the selected mode. The image is ready!</p>
-                        </div>
-                    </div>`;
-                }
-            } catch (error) {
-                console.error('Image re-check failed:', error);
-                window.showToast(`Image re-check failed: ${error.message}`, 'error');
-                if (enhanceSuggestions) enhanceSuggestions.innerHTML = `<p class="text-red-400">Failed to re-check image. Please try again.</p>`;
-            } finally {
-                if (recheckImageBtn) recheckImageBtn.disabled = false;
-            }
-        };
+                window.showToast(`Image is large, resizing for API...`, 'info');
+                const ratio = Math.min(maxDimension / width, maxDimension / height);
+                const newWidth = Math.round(width * ratio);
+                const newHeight = Math.round(height * ratio);
+                const canvas = document.createElement('canvas');
+                canvas.width = newWidth;
+                canvas.height = newHeight;
+                canvas.getContext('2d').drawImage(img, 0, 0, newWidth, newHeight);
+                canvas.toBlob(resolve, 'image/jpeg', 0.95);
+            };
+            img.onerror = (err) => reject(new Error("Failed to load image for resizing."));
+            img.src = imageUrl;
+        });
+    };
 
-        const handleAiUpscale = async (factor, buttonElement) => {
-    if (!currentFileObject) {
-        window.showToast('Please upload an image first.', 'error');
-        return;
-    }
-    if (aiUpscaleDropdown) aiUpscaleDropdown.classList.add('hidden');
-    window.showToast('Upscaling from original image. Manual adjustments will be reset.', 'info');
-    if (resetSlidersBtn) resetSlidersBtn.click();
-    
-    const upscaleIcon = buttonElement?.querySelector('.upscale-icon');
-    const upscaleSpinner = buttonElement?.querySelector('.upscale-spinner');
-    if (buttonElement) buttonElement.disabled = true;
-    if (upscaleIcon) upscaleIcon.classList.add('hidden');
-    if (upscaleSpinner) upscaleSpinner.classList.remove('hidden');
-
-    try {
-        const originalBase64 = await toBase64(currentFileObject);
-        const { width: originalWidth, height: originalHeight } = currentImageDimensions;
-
-        // নিশ্চিত করুন যে width এবং height সঠিক সংখ্যা
-        if (!originalWidth || !originalHeight) {
-            throw new Error("Could not determine original image dimensions.");
-        }
-
+    const callGeminiAPI = async (prompt, expectJson = true) => {
+        console.log("Resizing image before sending to Gemini API...");
+        if (!originalImageSrcForEnhance) throw new Error("Original image source is missing.");
+        const imageBlobForApi = await resizeImageForApi(originalImageSrcForEnhance, 1024);
+        const imageBase64Data = await toBase64(imageBlobForApi);
+        console.log("Calling Vercel proxy for Gemini...");
         const response = await fetch('/api/proxy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                api: "clipdrop-upscale",
-                base64Data: originalBase64,
-                factor: factor, // <-- ফ্যাক্টর পাঠানো হচ্ছে
-                originalWidth: originalWidth, // <-- মূল প্রস্থ পাঠানো হচ্ছে
-                originalHeight: originalHeight // <-- মূল উচ্চতা পাঠানো হচ্ছে
+                api: "gemini",
+                prompt: prompt,
+                base64Data: imageBase64Data,
+                expectJson: expectJson
             })
         });
 
         if (!response.ok) {
-            const errorResult = await response.json();
+            const errorResult = await response.json().catch(() => ({ error: 'Server returned a non-JSON error response.' }));
             throw new Error(errorResult.error || `Server error: ${response.status}`);
         }
 
         const result = await response.json();
-        const imageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
-        
-        const newFileName = `Upscaled-AI-${factor}x-${currentUploadedFileName || 'image.jpg'}`;
-        const newFile = new File([imageBlob], newFileName, { type: imageBlob.type });
-        
-        await updateImageStateAfterEdit(newFile, URL.createObjectURL(newFile));
-        window.showToast(`Image successfully upscaled by ${factor}x! Preview updated.`, 'success');
+        const textContent = result.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!textContent) throw new Error("Invalid API response structure from server.");
 
-    } catch (error) {
-        console.error('AI Upscale API Error:', error);
-        window.showToast(`AI Upscaling failed: ${error.message}`, 'error');
-    } finally {
-        if (buttonElement) {
-            buttonElement.disabled = false;
-            if (upscaleIcon) upscaleIcon.classList.remove('hidden');
-            if (upscaleSpinner) upscaleSpinner.classList.add('hidden');
+        if (expectJson) {
+            try {
+                const jsonMatch = textContent.match(/```json\s*([\s\S]*?)\s*```|({[\s\S]*})/);
+                if (!jsonMatch) throw new Error("No JSON object found in API response.");
+                return JSON.parse(jsonMatch[1] || jsonMatch[2]);
+            } catch(e) {
+                 throw new Error("AI response was not valid JSON. " + e.message);
+            }
+        } else {
+            return textContent;
         }
-    }
-};
- 
+    };
+      
+    // --- Feature Handlers ---
+
+    const handleAnalyze = async () => {
+        if (!imageBase64) { window.showToast('An image is required for analysis.', 'error'); return; }
+        if (loadingText) loadingText.textContent = 'Analyzing Image...';
+        if (initialState) initialState.classList.add('hidden');
+        if (resultsContent) resultsContent.classList.add('hidden');
+        if (loadingState) loadingState.classList.remove('hidden');
+        const promptText = `Analyze the provided image for a comprehensive, professional-level aesthetic and technical review. Output ONLY a valid JSON object. Do not include any explanatory text before or after the JSON. The JSON object should have the following structure: { "aestheticScore": <number from 0-100 for overall appeal>, "scoreBreakdown": { "lighting": <number 0-100>, "composition": <number 0-100>, "sharpness": <number 0-100>, "colorHarmony": <number 0-100>, "subjectFocus": <number 0-100> }, "tags": ["<up to 25 concise tags>"], "qualityInsights": { "compositionQuality": "<'Poor'|'Fair'|'Good'|'Excellent'>", "brightness": "<'Underexposed'|'Balanced'|'Overexposed'>", "contrast": "<'Low'|'Medium'|'High'>", "noiseLevel": "<'Low'|'Moderate'|'High'>", "subjectClarity": "<'Blurry'|'Soft'|'Sharp'>", "overallImpression": "<Briefly, e.g., 'Snapshot feel'>" }, "enhancementSuggestions": [ { "adjustment": "<e.g., 'Increase brightness by +10', 'Reduce saturation by -15', 'Sharpen image'>", "reason": "<why this will improve the image>" } ] } Ensure all numeric scores are integers. For adjustments, if a numeric value is implied, include it with its sign (e.g., +10, -15).`;
+        try {
+            const parsedData = await callGeminiAPI(promptText);
+            if (currentFileObject) { logUserAction('analyze_image', { filename: currentFileObject.name, filesize: currentFileObject.size }); }
+            displayAnalysisResults(parsedData);
+            window.showToast('Analysis complete!', 'success');
+        } catch (error) {
+            console.error('Analysis failed:', error);
+            window.showToast(`Analysis failed: ${error.message}`, 'error');
+            if (loadingState) loadingState.classList.add('hidden');
+            if (!analysisResults && initialState) initialState.classList.remove('hidden');
+            else if (resultsContent) resultsContent.classList.remove('hidden');
+        }
+    };
+
+    const handleEnhance = async () => {
+        if (!imageBase64) { window.showToast('An image is required.', 'error'); return; }
+        if (!window.isOpenCvReady) { window.showToast('Enhancement engine (OpenCV) is not ready. Please wait.', 'info'); return; }
+        displayEnhanceResults({ suggestions: [] }); 
+        displayImageTechProperties();
+        window.showToast('Opened Enhancement Panel. Generate suggestions or adjust manually.', 'info');
+        const selectedPromptType = enhancePromptTypeDropdown.value;
+        let promptForEnhancement = '';
+        const knownAdjustments = "Brightness, Contrast, Exposure, Shadows, Highlights, Saturation, Vibrance, Temperature, Tint, Sharpen, Denoise, Vignette";
+        const commonPromptSuffix = ` For each suggestion, provide a precise adjustment string using ONLY terms from this list: [${knownAdjustments}], followed by a numeric value with its sign if applicable (e.g., 'Increase Brightness by +10', 'Reduce Saturation by -15', 'Adjust Temperature by +5'). If a numeric value is not naturally part of a listed adjustment (e.g., 'Sharpen image', 'Denoise'), state the adjustment simply using only the listed terms. Output ONLY the valid JSON object: {"suggestions": [{"adjustment": "string", "reason": "string"}]}`;
+        switch (selectedPromptType) {
+            case 'microstock': promptForEnhancement = `You are a meticulous AI image quality inspector for microstock sites. Identify technical flaws: Lighting, Contrast, Shadow, Focus, Color Balance, Noise/Artifacts. If flaws exist, provide actionable suggestions. If no sound, return empty suggestions. ${commonPromptSuffix}`; break;
+            case 'aesthetic': promptForEnhancement = `Analyze the image for overall visual appeal. Suggest 3-5 enhancements for color, light, clarity, composition. ${commonPromptSuffix}`; break;
+            case 'artistic': promptForEnhancement = `This is an artistic image. Suggest 3-4 enhancements for artistic impact (mood, color harmony, texture, creative effects). Avoid making it look like a standard photo. ${commonPromptSuffix}`; break;
+            case 'fix_common': promptForEnhancement = `Assume this image is by an amateur. Look for common mistakes (exposure, contrast, focus, dull colors). Provide 2-3 simple fixes. ${commonPromptSuffix}`; break;
+            default: window.showToast('Invalid enhancement mode selected.', 'error'); return;
+        }
+        if (enhanceSuggestions) enhanceSuggestions.innerHTML = `<p class="text-gray-400 flex items-center gap-2"><i class="ph ph-spinner animate-spin text-2xl mr-2"></i>Generating suggestions...</p>`;
+        try {
+            const parsedData = await callGeminiAPI(promptForEnhancement, true);
+            displayEnhanceResults(parsedData);
+            displayImageTechProperties(); 
+        } catch (error) {
+            console.error('Enhancement suggestions failed:', error);
+            window.showToast(`Enhancement suggestions failed: ${error.message}`, 'error');
+            if (enhanceSuggestions) enhanceSuggestions.innerHTML = `<p class="text-red-400">Failed to get suggestions. You can still use manual controls.</p>`;
+        }
+    };
+
+    const handleObjectRemoval = async () => {
+        const maskData = maskCtx.getImageData(0, 0, removalMaskCanvas.width, removalMaskCanvas.height);
+        if (![...maskData.data].some(c => c !== 0)) { window.showToast('Please paint a mask over the object to remove.', 'info'); return; }
+        
+        if (removalLoadingOverlay) removalLoadingOverlay.classList.remove('hidden');
+        
+        try {
+            const imageBase64 = removalImageCanvas.toDataURL('image/jpeg').split(',')[1];
+            const maskBase64 = removalMaskCanvas.toDataURL('image/png').split(',')[1];
+
+            const response = await fetch('/api/proxy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    api: "clipdrop-cleanup",
+                    imageBase64: imageBase64,
+                    maskBase64: maskBase64
+                })
+            });
+
+            if (!response.ok) {
+                const errorResult = await response.json();
+                throw new Error(errorResult.error || `Server error: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            const resultingImageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
+            removedObjectBlob = resultingImageBlob;
+            
+            if (saveRemovedObjectBtn) saveRemovedObjectBtn.disabled = false;
+            const newSrc = URL.createObjectURL(resultingImageBlob);
+            removalImageObject.onload = () => {
+                removalCtx.clearRect(0, 0, removalImageCanvas.width, removalImageCanvas.height);
+                removalCtx.drawImage(removalImageObject, 0, 0);
+            };
+            removalImageObject.src = newSrc;
+            if (clearMaskBtn) clearMaskBtn.click();
+            window.showToast('Object removed! Click Save & Close to apply.', 'success');
+
+        } catch (error) {
+            console.error('Object Removal Error:', error);
+            window.showToast(`Object removal failed: ${error.message}`, 'error');
+        } finally {
+            if (removalLoadingOverlay) removalLoadingOverlay.classList.add('hidden');
+        }
+    };
+
+    const handleReimagine = async () => {
+        if (!currentFileObject) { window.showToast('Please upload an image first.', 'error'); return; }
+
+        reimagineBtn.disabled = true;
+        reimagineBtn.innerHTML = `<i class="ph ph-spinner animate-spin"></i> Reimagining...`;
+        
+        try {
+            const sourceImageUrl = enhancedImageSrcForEnhance || originalImageSrcForEnhance;
+            const imageBlobForApi = await resizeImageForApi(sourceImageUrl, 1024);
+            const imageBase64 = await toBase64(imageBlobForApi);
+
+            const response = await fetch('/api/proxy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    api: "clipdrop-reimagine",
+                    imageBase64: imageBase64
+                })
+            });
+
+            if (!response.ok) {
+                const errorResult = await response.json();
+                throw new Error(errorResult.error || `Server error: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            const imageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
+            const newFileName = `Reimagined-${currentUploadedFileName || 'image.jpg'}`;
+            const newFile = new File([imageBlob], newFileName, { type: imageBlob.type });
+            await updateImageStateAfterEdit(newFile, URL.createObjectURL(newFile));
+            window.showToast('Image successfully reimagined!', 'success');
+        } catch (error) {
+            console.error('Reimagine API Error:', error);
+            window.showToast(`Reimagine failed: ${error.message}`, 'error');
+        } finally {
+            reimagineBtn.disabled = false;
+            reimagineBtn.innerHTML = `<i class="ph-bold ph-sparkle"></i> Reimagine`;
+        }
+    };
+
+    const handleAiUpscale = async (factor, buttonElement) => {
+        if (!currentFileObject) {
+            window.showToast('Please upload an image first.', 'error');
+            return;
+        }
+        if (aiUpscaleDropdown) aiUpscaleDropdown.classList.add('hidden');
+        window.showToast('Upscaling from original image. Manual adjustments will be reset.', 'info');
+        if (resetSlidersBtn) resetSlidersBtn.click();
+        
+        const upscaleIcon = buttonElement?.querySelector('.upscale-icon');
+        const upscaleSpinner = buttonElement?.querySelector('.upscale-spinner');
+        if (buttonElement) buttonElement.disabled = true;
+        if (upscaleIcon) upscaleIcon.classList.add('hidden');
+        if (upscaleSpinner) upscaleSpinner.classList.remove('hidden');
+
+        try {
+            const originalBase64 = await toBase64(currentFileObject);
+            const { width: originalWidth, height: originalHeight } = currentImageDimensions;
+
+            if (!originalWidth || !originalHeight) {
+                throw new Error("Could not determine original image dimensions.");
+            }
+
+            const response = await fetch('/api/proxy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    api: "clipdrop-upscale",
+                    base64Data: originalBase64,
+                    factor: factor,
+                    originalWidth: originalWidth,
+                    originalHeight: originalHeight
+                })
+            });
+
+            if (!response.ok) {
+                const errorResult = await response.json();
+                throw new Error(errorResult.error || `Server error: ${response.status}`);
+            }
+
+            const result = await response.json();
+            const imageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
+            
+            const newFileName = `Upscaled-AI-${factor}x-${currentUploadedFileName || 'image.jpg'}`;
+            const newFile = new File([imageBlob], newFileName, { type: imageBlob.type });
+            
+            await updateImageStateAfterEdit(newFile, URL.createObjectURL(newFile));
+            window.showToast(`Image successfully upscaled by ${factor}x! Preview updated.`, 'success');
+
+        } catch (error) {
+            console.error('AI Upscale API Error:', error);
+            window.showToast(`AI Upscaling failed: ${error.message}`, 'error');
+        } finally {
+            if (buttonElement) {
+                buttonElement.disabled = false;
+                if (upscaleIcon) upscaleIcon.classList.remove('hidden');
+                if (upscaleSpinner) upscaleSpinner.classList.add('hidden');
+            }
+        }
+    };
+    
         const handleNormalUpscale = (factor, buttonElement) => {
             if (!window.isOpenCvReady || !originalImageSrcForEnhance) return;
             if(normalUpscaleDropdown) normalUpscaleDropdown.classList.add('hidden');
@@ -3330,7 +2948,53 @@ document.addEventListener('DOMContentLoaded', () => {
             removalImageObject.src = enhancedImageSrcForEnhance || originalImageSrcForEnhance;
         }
         
+    async function handleObjectRemoval() {
+    const maskData = maskCtx.getImageData(0, 0, removalMaskCanvas.width, removalMaskCanvas.height);
+    if (![...maskData.data].some(c => c !== 0)) { window.showToast('Please paint a mask over the object to remove.', 'info'); return; }
     
+    if (removalLoadingOverlay) removalLoadingOverlay.classList.remove('hidden');
+    
+    try {
+        const imageBase64 = removalImageCanvas.toDataURL('image/jpeg').split(',')[1];
+        const maskBase64 = removalMaskCanvas.toDataURL('image/png').split(',')[1];
+
+        // --- মূল সমাধান: Vercel প্রক্সিকে কল করা হচ্ছে ---
+        const response = await fetch('/api/proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                api: "clipdrop-cleanup", // <-- সঠিক API নাম
+                imageBase64: imageBase64,
+                maskBase64: maskBase64
+            })
+        });
+
+        if (!response.ok) {
+            const errorResult = await response.json();
+            throw new Error(errorResult.error || `Server error: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        const resultingImageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
+        removedObjectBlob = resultingImageBlob;
+        
+        if (saveRemovedObjectBtn) saveRemovedObjectBtn.disabled = false;
+        const newSrc = URL.createObjectURL(resultingImageBlob);
+        removalImageObject.onload = () => {
+            removalCtx.clearRect(0, 0, removalImageCanvas.width, removalImageCanvas.height);
+            removalCtx.drawImage(removalImageObject, 0, 0);
+        };
+        removalImageObject.src = newSrc;
+        if (clearMaskBtn) clearMaskBtn.click();
+        window.showToast('Object removed! Click Save & Close to apply.', 'success');
+
+    } catch (error) {
+        console.error('Object Removal Error:', error);
+        window.showToast(`Object removal failed: ${error.message}`, 'error');
+    } finally {
+        if (removalLoadingOverlay) removalLoadingOverlay.classList.add('hidden');
+    }
+}
       
         async function saveAndCloseObjectRemoval() {
             if (!removedObjectBlob) {
@@ -5627,6 +5291,7 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
+
 
 
 
