@@ -425,7 +425,7 @@
         <!-- Icon Buttons -->
         <div class="hidden md:flex items-center gap-4">
             
-            <button class="text-gray-400 hover:text-white transition-colors"><i class="ph ph-gear text-xl"></i></button>
+            <button id="manageApiKeysBtn" class="text-gray-400 hover:text-white transition-colors"><i class="ph ph-gear text-xl"></i></button>
             <div id="auth-section" class="relative">
                 <button id="login-button" class="text-gray-400 hover:text-white transition-colors"><i class="ph ph-user-circle text-2xl"></i></button>
                 <img id="user-avatar" src="" alt="User Avatar" class="hidden w-8 h-8 rounded-full bg-gray-700 border-2 border-gray-600 cursor-pointer">
@@ -2113,31 +2113,12 @@ document.addEventListener('DOMContentLoaded', () => {
     <div id="container-7128caf782579cf1a6e998e1d0a0fe7b"></div>
 
     <!-- Main Application Logic -->
-           <script>
+       <script>
     document.addEventListener('DOMContentLoaded', () => {
-      
-      
-            // একটি টাইমআউট সেট করা হচ্ছে, যদি কোনো উত্তর না আসে
-            setTimeout(() => {
-                if (window[callbackName]) {
-                    reject(new Error("Request timed out. The server might be busy or there's a network issue."));
-                    delete window[callbackName];
-                    document.body.removeChild(iframe);
-                    document.body.removeChild(form);
-                }
-            }, 45000); // ৪৫ সেকেন্ড পর টাইমআউট
-
-            form.submit();
-        } catch (error) {
-            reject(error);
-        }
-    });
-}
-      
         // --- Global State ---
-        
         let imageBase64 = '';
         let currentFileObject = null;
+        // API Keys are no longer stored in global JS variables for calls, localStorage is used by the settings modal only.
         let analysisResults = null;
         let currentMetadata = null;
         let enhancementSuggestionsData = null; 
@@ -2151,10 +2132,9 @@ document.addEventListener('DOMContentLoaded', () => {
         let batchQueue = [];
         let batchResults = [];
         let batchMetadataResults = [];
-        let currentBatchPreviewIndex = null; // NEW: For batch preview
+        let currentBatchPreviewIndex = null;
         let fileToDownloadFromRecents = null;
-        // For Super Resolution or other custom sources
-        window.downloadContext = null; // { src: objectUrl, nameBase: string }
+        window.downloadContext = null;
 
         // --- Cache API ---
         const CACHE_NAME = 'pixelperfect-recent-images-v1';
@@ -2168,7 +2148,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const promptBtn = document.getElementById('promptBtn');
         const superResolutionBtn = document.getElementById('superResolutionBtn');
         const localVariationsBtn = document.getElementById('localVariationsBtn');
-       
         const uploadBox = document.getElementById('uploadBox');
         const imageUpload = document.getElementById('imageUpload');
         const browseBtn = document.getElementById('browseBtn');
@@ -2259,6 +2238,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const batchProgress = document.getElementById('batchProgress');
         const startBatchProcessBtn = document.getElementById('startBatchProcessBtn');
         const downloadBatchZipBtn = document.getElementById('downloadBatchZipBtn');
+        const downloadMetadataCsvBtn = document.getElementById('downloadMetadataCsvBtn');
         const batchSliders = document.querySelectorAll('#batchModal input[type="range"]:not(#batch-image-compare-slider)');
         const batchAddMoreBtn = document.getElementById('batchAddMoreBtn'); 
         const batchPreviewContainer = document.getElementById('batchPreviewContainer'); 
@@ -2270,7 +2250,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const batchImageCompareSlider = document.getElementById('batch-image-compare-slider');
         const srUploadPreviewContainer = document.getElementById('srUploadPreviewContainer');
         const srRemoveImageBtn = document.getElementById('srRemoveImageBtn');
-        // Watermark Elements
         const batchAddWatermark = document.getElementById('batchAddWatermark');
         const batchWatermarkOptions = document.getElementById('batchWatermarkOptions');
         const batchWatermarkTypeRadios = document.querySelectorAll('input[name="batchWatermarkType"]');
@@ -2285,7 +2264,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const batchWatermarkOpacity = document.getElementById('batchWatermarkOpacity');
         const batchWatermarkOpacityValue = document.getElementById('batchWatermarkOpacityValue');
         const batchWatermarkPosition = document.getElementById('batchWatermarkPosition');
-        // Local Variations selectors
+        const batchGenerateMetadata = document.getElementById('batchGenerateMetadata');
         const localVariationsModal = document.getElementById('localVariationsModal');
         const closeLocalVariationsModalBtn = document.getElementById('closeLocalVariationsModalBtn');
         const lvCountInput = document.getElementById('lvCount');
@@ -2297,8 +2276,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const lvProgress = document.getElementById('lvProgress');
         const lvGrid = document.getElementById('lvGrid');
         const lvEmpty = document.getElementById('lvEmpty');
+        const apiKeyModal = document.getElementById('apiKeyModal');
+        const closeApiKeyModalBtn = document.getElementById('closeApiKeyModalBtn');
+        const saveApiKeysBtn = document.getElementById('saveApiKeysBtn');
         let lvResults = [];
-
 
         if (progressCircle) {
             const circleRadius = progressCircle.r.baseVal.value;
@@ -2318,65 +2299,30 @@ document.addEventListener('DOMContentLoaded', () => {
         window.updateEnhanceButtonState = () => {
             const isImageLoaded = !!imageBase64;
             const isCvReady = window.isOpenCvReady;
+            const isBackendReady = isImageLoaded; 
 
-            // API কী-এর উপর নির্ভরতা সরানো হয়েছে
-            const isBackendReady = isImageLoaded; // ব্যাকএন্ড ব্যবহারের জন্য শুধু ইমেজ লোড হওয়াই যথেষ্ট
-
-            // বাটনগুলোর অবস্থা নতুন লজিক অনুযায়ী আপডেট করা হচ্ছে
-            if (enhanceBtn) enhanceBtn.disabled = !(isBackendReady && isCvReady); // Enhance-এর জন্য OpenCV এবং ইমেজ দুটোই লাগবে
+            if (enhanceBtn) enhanceBtn.disabled = !(isBackendReady && isCvReady);
             if (metadataBtn) metadataBtn.disabled = !isBackendReady;
             if (promptBtn) promptBtn.disabled = !isBackendReady;
-            if (superResolutionBtn) superResolutionBtn.disabled = !isImageLoaded; // এটি আগের মতোই ঠিক আছে
-            if (localVariationsBtn) localVariationsBtn.disabled = !(isImageLoaded && isCvReady); // এটিও ঠিক আছে
-
-            // Enhance মডালের বাটনগুলো
+            if (superResolutionBtn) superResolutionBtn.disabled = !isImageLoaded;
+            if (localVariationsBtn) localVariationsBtn.disabled = !(isImageLoaded && isCvReady);
             if (cropBtn) cropBtn.disabled = !isImageLoaded;
             if (objectRemovalBtn) objectRemovalBtn.disabled = !isBackendReady;
             if (reimagineBtn) reimagineBtn.disabled = !isBackendReady;
             if (normalUpscaleToggleBtn) normalUpscaleToggleBtn.disabled = !(isImageLoaded && isCvReady);
-            if (aiUpscaleToggleBtn) aiUpscaleToggleBtn.disabled = !isBackendReady; // AI Upscale এখন ব্যাকএন্ড নির্ভর
+            if (aiUpscaleToggleBtn) aiUpscaleToggleBtn.disabled = !isBackendReady;
 
-            // টাইটেল বা টুলটিপ আপডেট (অপশনাল কিন্তু ভালো অভ্যাস)
             if (objectRemovalBtn) objectRemovalBtn.title = isImageLoaded ? "Remove objects from the image" : "Image required";
             if (reimagineBtn) reimagineBtn.title = isImageLoaded ? "Create variations of the image" : "Image required";
             if (aiUpscaleToggleBtn) aiUpscaleToggleBtn.title = isImageLoaded ? "Upscale using AI" : "Image required";
         };
 
-
-       const updateUI = () => {
-            // এখন শুধু ইমেজ লোড হয়েছে কি না, তা পরীক্ষা করা হচ্ছে
+        const updateUI = () => {
             const isAnalysisReady = !!imageBase64; 
             if (analyzeBtn) analyzeBtn.disabled = !isAnalysisReady;
-            
-            // updateEnhanceButtonState ফাংশনটিকে কল করা হচ্ছে
             window.updateEnhanceButtonState();
         };
         
-        const loadApiKeysFromStorage = () => {
-            apiKey = localStorage.getItem('geminiApiKey') || '';
-            clipDropApiKey = localStorage.getItem('clipDropApiKey') || '';
-            deepAiApiKey = localStorage.getItem('deepAiApiKey') || '';
-            if (geminiApiKeyInput) geminiApiKeyInput.value = apiKey;
-            if (clipdropApiKeyInput) clipdropApiKeyInput.value = clipDropApiKey;
-            if (deepAiApiKeyInput) deepAiApiKeyInput.value = deepAiApiKey;
-            updateUI();
-        };
-
-        const saveApiKeys = () => {
-            apiKey = (geminiApiKeyInput?.value || '').trim();
-            clipDropApiKey = (clipdropApiKeyInput?.value || '').trim();
-            // Only read/store DeepAI key if the input exists in DOM
-            if (typeof deepAiApiKeyInput !== 'undefined' && deepAiApiKeyInput) {
-                deepAiApiKey = (deepAiApiKeyInput.value || '').trim();
-                localStorage.setItem('deepAiApiKey', deepAiApiKey);
-            }
-            localStorage.setItem('geminiApiKey', apiKey);
-            localStorage.setItem('clipDropApiKey', clipDropApiKey);
-            if(window.showToast) window.showToast('API Keys saved successfully!', 'success');
-            if (apiKeyModal) apiKeyModal.classList.add('hidden');
-            updateUI();
-        };
-
         const setProgress = (percent) => {
             if (!progressCircle || !scoreText) return;
             const circleRadius = progressCircle.r.baseVal.value;
@@ -2530,6 +2476,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (initialState) initialState.classList.add('hidden');
             if (loadingState) loadingState.classList.add('hidden');
         };
+
         const displayEnhanceResults = (data) => {
             enhancementSuggestionsData = data.suggestions; 
             if (!enhanceSuggestions) return;
@@ -2550,81 +2497,64 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (enhanceModal) enhanceModal.classList.remove('hidden');
         };
-       
-       
 
-            // একটি টাইমআউট সেট করা হচ্ছে
-            setTimeout(() => {
-                if (window[callbackName]) {
-                    // যদি ৪৫ সেকেন্ড পর উত্তর না আসে
-                    delete window[callbackName];
-                    document.body.removeChild(iframe);
-                    document.body.removeChild(form);
-                    reject(new Error("Request timed out. The server might be busy or there's a network issue."));
-                }
-            }, 45000); // ৪৫ সেকেন্ড
-
-            // ফর্ম সাবমিট করা হচ্ছে
-            form.submit();
+        // ==========================================================
+        // ||       START: PROXY API CALL FIX (ALL IN ONE)         ||
+        // ==========================================================
+        const callGeminiAPI = async (prompt, imageBase64Data_unused, expectJson = true) => {
+            // FIX: Removed client-side Gemini API key check. The proxy server handles the key.
             
-        } catch (error) {
-            reject(error);
-        }
-    });
-}
+            console.log("Resizing image before sending to Gemini API via proxy...");
+            
+            let imageToSendBase64;
+            if (imageBase64Data_unused) {
+                // This is used for batch processing where the file is processed directly
+                imageToSendBase64 = imageBase64Data_unused;
+            } else {
+                if (!originalImageSrcForEnhance) throw new Error("Original image source is missing for Gemini call.");
+                const imageBlobForApi = await resizeImageForApi(originalImageSrcForEnhance, 1024);
+                imageToSendBase64 = await toBase64(imageBlobForApi);
+            }
+            
+            const API_URL = '/api/proxy';
+            
+            const payload = {
+                api: "gemini-pro-vision", // Tell the proxy which service to use
+                prompt: prompt,
+                imageBase64: imageToSendBase64
+            };
 
- 
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
 
-// ==========================================================
-// ||       UPDATED callGeminiAPI FUNCTION                 ||
-// ==========================================================
-// এই ফাংশনটি এখন শুধুমাত্র একটি Wrapper হিসেবে কাজ করবে
+            if (!response.ok) {
+                const errorResult = await response.json();
+                const errorMessage = errorResult?.error || `Server proxy error: ${response.status}`;
+                throw new Error(errorMessage);
+            }
 
- const callGeminiAPI = async (prompt, imageBase64Data_unused, expectJson = true) => {
-    console.log("Resizing image before sending to Gemini API...");
-    if (!originalImageSrcForEnhance) throw new Error("Original image source is missing.");
+            const result = await response.json();
+            const textContent = result.textContent; 
+            if (!textContent) throw new Error("Invalid API response structure from proxy server.");
 
-    // ছবিটি রিসাইজ করা হচ্ছে
-    const imageBlobForApi = await resizeImageForApi(originalImageSrcForEnhance, 1024);
-    
-    // রিসাইজ করা ছবিকে base64-এ রূপান্তর করা হচ্ছে
-    const imageBase64Data = await toBase64(imageBlobForApi);
-
-    console.log("Calling Vercel proxy for Gemini...");
-
-    // Vercel proxy-কে কল করা হচ্ছে
-    const response = await fetch('/api/proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            api: "gemini",
-            prompt: prompt,
-            base64Data: imageBase64Data,
-            expectJson: expectJson
-        })
-    });
-
-    if (!response.ok) {
-        const errorResult = await response.json();
-        throw new Error(errorResult.error || `Server error: ${response.status}`);
-    }
-
-    const result = await response.json();
-    const textContent = result.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!textContent) throw new Error("Invalid API response structure from server.");
-
-    if (expectJson) {
-        try {
-            const jsonMatch = textContent.match(/```json\s*([\s\S]*?)\s*```|({[\s\S]*})/);
-            if (!jsonMatch) throw new Error("No JSON object found in API response.");
-            return JSON.parse(jsonMatch[1] || jsonMatch[2]);
-        } catch(e) {
-             throw new Error("AI response was not valid JSON. " + e.message);
-        }
-    } else {
-        return textContent;
-    }
-};
+            if (expectJson) {
+                try {
+                    const jsonMatch = textContent.match(/```json\s*([\s\S]*?)\s*```|({[\s\S]*})/);
+                    if (!jsonMatch) throw new Error("No JSON object found in API response from proxy.");
+                    return JSON.parse(jsonMatch[1] || jsonMatch[2]);
+                } catch(e) {
+                     throw new Error("AI response from proxy was not valid JSON. " + e.message);
+                }
+            } else {
+                return textContent;
+            }
+        };
+        // ==========================================================
+        // ||        END: PROXY API CALL FIX (ALL IN ONE)          ||
+        // ==========================================================
       
         const handleAnalyze = async () => {
             if (!imageBase64) { if (window.showToast) window.showToast('An image is required for analysis.', 'error'); return; }
@@ -2634,15 +2564,13 @@ document.addEventListener('DOMContentLoaded', () => {
             if (loadingState) loadingState.classList.remove('hidden');
             const promptText = `Analyze the provided image for a comprehensive, professional-level aesthetic and technical review. Output ONLY a valid JSON object. Do not include any explanatory text before or after the JSON. The JSON object should have the following structure: { "aestheticScore": <number from 0-100 for overall appeal>, "scoreBreakdown": { "lighting": <number 0-100>, "composition": <number 0-100>, "sharpness": <number 0-100>, "colorHarmony": <number 0-100>, "subjectFocus": <number 0-100> }, "tags": ["<up to 25 concise tags>"], "qualityInsights": { "compositionQuality": "<'Poor'|'Fair'|'Good'|'Excellent'>", "brightness": "<'Underexposed'|'Balanced'|'Overexposed'>", "contrast": "<'Low'|'Medium'|'High'>", "noiseLevel": "<'Low'|'Moderate'|'High'>", "subjectClarity": "<'Blurry'|'Soft'|'Sharp'>", "overallImpression": "<Briefly, e.g., 'Snapshot feel'>" }, "enhancementSuggestions": [ { "adjustment": "<e.g., 'Increase brightness by +10', 'Reduce saturation by -15', 'Sharpen image'>", "reason": "<why this will improve the image>" } ] } Ensure all numeric scores are integers. For adjustments, if a numeric value is implied, include it with its sign (e.g., +10, -15).`;
             try {
-                const parsedData = await callGeminiAPI(promptText, imageBase64);
-                
-                 if (currentFileObject) {
-                    logUserAction('analyze_image', { 
+                const parsedData = await callGeminiAPI(promptText, null); // Pass null, it will use global originalImageSrcForEnhance
+                if (currentFileObject && window.logUserAction) {
+                    window.logUserAction('analyze_image', { 
                         filename: currentFileObject.name, 
                         filesize: currentFileObject.size 
                     });
                 }
-              
                 displayAnalysisResults(parsedData);
                 if (window.showToast) window.showToast('Analysis complete!', 'success');
             } catch (error) {
@@ -2653,6 +2581,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 else if (resultsContent) resultsContent.classList.remove('hidden');
             }
         };
+
         const formatBytes = (bytes, decimals = 2) => {
             if (!bytes || bytes === 0) return '0 Bytes';
             const k = 1024;
@@ -2660,7 +2589,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-        }
+        };
+
         const displayImageTechProperties = () => {
             const fileNameEl = document.getElementById('tech-prop-filename');
             const dimensionsEl = document.getElementById('tech-prop-dimensions');
@@ -2696,6 +2626,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setValues([filesizeEl, hFilesizeEl], [sizeVal, sizeVal]);
             setValues([filetypeEl, hFiletypeEl], [typeVal, typeVal]);
         };
+
         const handleEnhance = async () => {
             if (!imageBase64) { if (window.showToast) window.showToast('An image is required.', 'error'); return; }
             if (!window.isOpenCvReady) { if (window.showToast) window.showToast('Enhancement engine (OpenCV) is not ready. Please wait.', 'info'); return; }
@@ -2715,7 +2646,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (enhanceSuggestions) enhanceSuggestions.innerHTML = `<p class="text-gray-400 flex items-center gap-2"><i class="ph ph-spinner animate-spin text-2xl mr-2"></i>Generating suggestions...</p>`;
             try {
-                const parsedData = await callGeminiAPI(promptForEnhancement, imageBase64, true);
+                const parsedData = await callGeminiAPI(promptForEnhancement, null, true);
                 displayEnhanceResults(parsedData);
                 displayImageTechProperties(); 
             } catch (error) {
@@ -2724,34 +2655,33 @@ document.addEventListener('DOMContentLoaded', () => {
                  if (enhanceSuggestions) enhanceSuggestions.innerHTML = `<p class="text-red-400">Failed to get suggestions. You can still use manual controls.</p>`;
             }
         };
-       // --- নতুন কোড (এটি পেস্ট করুন) ---
+
         const copyToClipboard = (text, type = 'Text') => {
-      // আধুনিক navigator.clipboard API ব্যবহার করা হচ্ছে
-       if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(text).then(() => {
-            if (window.showToast) window.showToast(`${type} copied to clipboard!`);
-        }).catch(err => {
-            if (window.showToast) window.showToast(`Failed to copy ${type}.`, 'error');
-            console.error('Async clipboard copy failed:', err);
-        });
-    } else {
-        // পুরোনো ব্রাউজারের জন্য ফলব্যাক পদ্ধতি
-        const tempTextArea = document.createElement('textarea');
-        tempTextArea.style.position = 'absolute';
-        tempTextArea.style.left = '-9999px';
-        tempTextArea.value = text;
-        document.body.appendChild(tempTextArea);
-        tempTextArea.select();
-        try {
-            document.execCommand('copy');
-            if (window.showToast) window.showToast(`${type} copied to clipboard!`);
-        } catch (err) {
-            if (window.showToast) window.showToast(`Failed to copy ${type}.`, 'error');
-            console.error('Fallback clipboard copy failed:', err);
+           if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(() => {
+                if (window.showToast) window.showToast(`${type} copied to clipboard!`);
+            }).catch(err => {
+                if (window.showToast) window.showToast(`Failed to copy ${type}.`, 'error');
+                console.error('Async clipboard copy failed:', err);
+            });
+        } else {
+            const tempTextArea = document.createElement('textarea');
+            tempTextArea.style.position = 'absolute';
+            tempTextArea.style.left = '-9999px';
+            tempTextArea.value = text;
+            document.body.appendChild(tempTextArea);
+            tempTextArea.select();
+            try {
+                document.execCommand('copy');
+                if (window.showToast) window.showToast(`${type} copied to clipboard!`);
+            } catch (err) {
+                if (window.showToast) window.showToast(`Failed to copy ${type}.`, 'error');
+                console.error('Fallback clipboard copy failed:', err);
+            }
+            document.body.removeChild(tempTextArea);
         }
-        document.body.removeChild(tempTextArea);
-    }
-};
+    };
+
         const updateEnhancedImage = (dataUrl) => {
             enhancedImageSrcForEnhance = dataUrl;
             if (afterImageSlider) afterImageSlider.src = dataUrl;
@@ -2760,6 +2690,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 imageCompareSlider.dispatchEvent(new Event('input'));
             }
         };
+    
                 const handleImageUrlInput = async () => {
             if (!imageUrlInput) return;
             const url = imageUrlInput.value.trim();
@@ -2803,7 +2734,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (thumb) thumb.src = originalImageSrcForEnhance || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Crect width='100%25' height='100%25' fill='%23222b3a'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='gray' font-size='18'%3ENo Image%3C/text%3E%3C/svg%3E";
             if (fileNameDiv) fileNameDiv.textContent = currentUploadedFileName;
             const promptText = `Analyze the image and generate SEO-friendly metadata. Provide ONLY a valid JSON object with the keys: 'fileName', 'title', and 'keywords' (as an array of strings). Use the original image's characteristics. Example: {"fileName": "red-rose-with-dew-drops.jpg", "title": "Vibrant Red Rose Covered in Morning Dew | Macro Photography", "keywords": ["red rose", "flower", "macro", "dew drops", "nature", "romance", "beauty"]}`;
-            try { const data = await callGeminiAPI(promptText, imageBase64, true); currentMetadata = data;  logUserAction('generate_metadata', {
+            try { const data = await callGeminiAPI(promptText, null, true); currentMetadata = data;  logUserAction('generate_metadata', {
                     filename: currentUploadedFileName
                 }); displayMetadata(data); } 
             catch (error) { console.error('Metadata generation failed:', error); if (window.showToast) window.showToast(`Metadata generation failed: ${error.message}`, 'error'); if (metadataContent) metadataContent.innerHTML = `<p class="text-red-400">Failed to generate metadata.</p>`; }
@@ -2821,7 +2752,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (thumb) thumb.src = originalImageSrcForEnhance || "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Crect width='100%25' height='100%25' fill='%23222b3a'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='gray' font-size='18'%3ENo Image%3C/text%3E%3C/svg%3E";
             if (fileNameDiv) fileNameDiv.textContent = currentUploadedFileName;
             const promptText = `Describe the provided image in vivid detail, as if you were creating a prompt for an AI image generator like Midjourney or DALL-E. Capture the subject, style, lighting, composition, and mood. Provide ONLY the text of the prompt, without any extra formatting, labels, or quotation marks.`;
-            try { const data = await callGeminiAPI(promptText, imageBase64, false); displayPrompt(data); } 
+            try { const data = await callGeminiAPI(promptText, null, false); displayPrompt(data); } 
             catch(error) { console.error('Prompt generation failed:', error); if (window.showToast) window.showToast(`Prompt generation failed: ${error.message}`, 'error'); if (promptContent) promptContent.textContent = `Failed to generate prompt.`; }
         };
         const displayPrompt = (promptText) => { if (promptContent) promptContent.textContent = promptText; };
@@ -3066,66 +2997,65 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         const handleAiUpscale = async (factor, buttonElement) => {
-    if (!currentFileObject) {
-        window.showToast('Please upload an image first.', 'error');
-        return;
-    }
-    if (aiUpscaleDropdown) aiUpscaleDropdown.classList.add('hidden');
-    window.showToast('Upscaling from original image. Manual adjustments will be reset.', 'info');
-    if (resetSlidersBtn) resetSlidersBtn.click();
-    
-    const upscaleIcon = buttonElement?.querySelector('.upscale-icon');
-    const upscaleSpinner = buttonElement?.querySelector('.upscale-spinner');
-    if (buttonElement) buttonElement.disabled = true;
-    if (upscaleIcon) upscaleIcon.classList.add('hidden');
-    if (upscaleSpinner) upscaleSpinner.classList.remove('hidden');
+            if (!currentFileObject) {
+                window.showToast('Please upload an image first.', 'error');
+                return;
+            }
+            if (aiUpscaleDropdown) aiUpscaleDropdown.classList.add('hidden');
+            window.showToast('Upscaling from original image. Manual adjustments will be reset.', 'info');
+            if (resetSlidersBtn) resetSlidersBtn.click();
+            
+            const upscaleIcon = buttonElement?.querySelector('.upscale-icon');
+            const upscaleSpinner = buttonElement?.querySelector('.upscale-spinner');
+            if (buttonElement) buttonElement.disabled = true;
+            if (upscaleIcon) upscaleIcon.classList.add('hidden');
+            if (upscaleSpinner) upscaleSpinner.classList.remove('hidden');
 
-    try {
-        const originalBase64 = await toBase64(currentFileObject);
-        const { width: originalWidth, height: originalHeight } = currentImageDimensions;
+            try {
+                const originalBase64 = await toBase64(currentFileObject);
+                const { width: originalWidth, height: originalHeight } = currentImageDimensions;
 
-        // নিশ্চিত করুন যে width এবং height সঠিক সংখ্যা
-        if (!originalWidth || !originalHeight) {
-            throw new Error("Could not determine original image dimensions.");
-        }
+                if (!originalWidth || !originalHeight) {
+                    throw new Error("Could not determine original image dimensions.");
+                }
 
-        const response = await fetch('/api/proxy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                api: "clipdrop-upscale",
-                base64Data: originalBase64,
-                factor: factor, // <-- ফ্যাক্টর পাঠানো হচ্ছে
-                originalWidth: originalWidth, // <-- মূল প্রস্থ পাঠানো হচ্ছে
-                originalHeight: originalHeight // <-- মূল উচ্চতা পাঠানো হচ্ছে
-            })
-        });
+                const response = await fetch('/api/proxy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        api: "clipdrop-upscale",
+                        imageBase64: originalBase64,
+                        factor: factor,
+                        originalWidth: originalWidth,
+                        originalHeight: originalHeight
+                    })
+                });
 
-        if (!response.ok) {
-            const errorResult = await response.json();
-            throw new Error(errorResult.error || `Server error: ${response.status}`);
-        }
+                if (!response.ok) {
+                    const errorResult = await response.json();
+                    throw new Error(errorResult.error || `Server error: ${response.status}`);
+                }
 
-        const result = await response.json();
-        const imageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
-        
-        const newFileName = `Upscaled-AI-${factor}x-${currentUploadedFileName || 'image.jpg'}`;
-        const newFile = new File([imageBlob], newFileName, { type: imageBlob.type });
-        
-        await updateImageStateAfterEdit(newFile, URL.createObjectURL(newFile));
-        window.showToast(`Image successfully upscaled by ${factor}x! Preview updated.`, 'success');
+                const result = await response.json();
+                const imageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
+                
+                const newFileName = `Upscaled-AI-${factor}x-${currentUploadedFileName || 'image.jpg'}`;
+                const newFile = new File([imageBlob], newFileName, { type: imageBlob.type });
+                
+                await updateImageStateAfterEdit(newFile, URL.createObjectURL(newFile));
+                window.showToast(`Image successfully upscaled by ${factor}x! Preview updated.`, 'success');
 
-    } catch (error) {
-        console.error('AI Upscale API Error:', error);
-        window.showToast(`AI Upscaling failed: ${error.message}`, 'error');
-    } finally {
-        if (buttonElement) {
-            buttonElement.disabled = false;
-            if (upscaleIcon) upscaleIcon.classList.remove('hidden');
-            if (upscaleSpinner) upscaleSpinner.classList.add('hidden');
-        }
-    }
-};
+            } catch (error) {
+                console.error('AI Upscale API Error:', error);
+                window.showToast(`AI Upscaling failed: ${error.message}`, 'error');
+            } finally {
+                if (buttonElement) {
+                    buttonElement.disabled = false;
+                    if (upscaleIcon) upscaleIcon.classList.remove('hidden');
+                    if (upscaleSpinner) upscaleSpinner.classList.add('hidden');
+                }
+            }
+        };
  
         const handleNormalUpscale = (factor, buttonElement) => {
             if (!window.isOpenCvReady || !originalImageSrcForEnhance) return;
@@ -3190,13 +3120,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 50);
         };
         
-        // ****** START: NEW HELPER FUNCTION FOR RESIZING ******
-        /**
-         * Resizes an image if it's larger than the max dimension, maintaining aspect ratio.
-         * @param {string} imageUrl The source URL of the image to resize.
-         * @param {number} maxDimension The maximum allowed width or height.
-         * @returns {Promise<Blob>} A promise that resolves with the (possibly resized) image blob.
-         */
         const resizeImageForApi = (imageUrl, maxDimension) => {
             return new Promise((resolve, reject) => {
                 const img = new Image();
@@ -3205,7 +3128,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     const { naturalWidth: width, naturalHeight: height } = img;
 
                     if (width <= maxDimension && height <= maxDimension) {
-                        // Image is within limits, no resize needed. Just convert to blob.
                         const canvas = document.createElement('canvas');
                         canvas.width = width;
                         canvas.height = height;
@@ -3215,8 +3137,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
                     
-                    // Image needs resizing
-                    window.showToast(`Image is large, resizing for Reimagine...`, 'info');
+                    window.showToast(`Image is large, resizing for API call...`, 'info');
                     const ratio = Math.min(maxDimension / width, maxDimension / height);
                     const newWidth = Math.round(width * ratio);
                     const newHeight = Math.round(height * ratio);
@@ -3235,53 +3156,47 @@ document.addEventListener('DOMContentLoaded', () => {
                 img.src = imageUrl;
             });
         };
-        // ****** END: NEW HELPER FUNCTION FOR RESIZING ******
 
        const handleReimagine = async () => {
-    if (!currentFileObject) { window.showToast('Please upload an image first.', 'error'); return; }
+            if (!currentFileObject) { window.showToast('Please upload an image first.', 'error'); return; }
 
-    reimagineBtn.disabled = true;
-    reimagineBtn.innerHTML = `<i class="ph ph-spinner animate-spin"></i> Reimagining...`;
-    
-    try {
-        const sourceImageUrl = enhancedImageSrcForEnhance || originalImageSrcForEnhance;
-        const imageBlobForApi = await resizeImageForApi(sourceImageUrl, 1024);
-        const imageBase64 = await toBase64(imageBlobForApi);
+            reimagineBtn.disabled = true;
+            reimagineBtn.innerHTML = `<i class="ph ph-spinner animate-spin"></i> Reimagining...`;
+            
+            try {
+                const sourceImageUrl = enhancedImageSrcForEnhance || originalImageSrcForEnhance;
+                const imageBlobForApi = await resizeImageForApi(sourceImageUrl, 1024);
+                const imageBase64 = await toBase64(imageBlobForApi);
 
-        // --- মূল সমাধান: Vercel প্রক্সিকে কল করা হচ্ছে ---
-        const response = await fetch('/api/proxy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                api: "clipdrop-reimagine", // <-- সঠিক API নাম
-                imageBase64: imageBase64
-            })
-        });
+                const response = await fetch('/api/proxy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        api: "clipdrop-reimagine",
+                        imageBase64: imageBase64
+                    })
+                });
 
-        if (!response.ok) {
-            const errorResult = await response.json();
-            throw new Error(errorResult.error || `Server error: ${response.status}`);
-        }
-        
-        const result = await response.json();
-        const imageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
-        const newFileName = `Reimagined-${currentUploadedFileName || 'image.jpg'}`;
-        const newFile = new File([imageBlob], newFileName, { type: imageBlob.type });
-        await updateImageStateAfterEdit(newFile, URL.createObjectURL(newFile));
-        window.showToast('Image successfully reimagined!', 'success');
-    } catch (error) {
-        console.error('Reimagine API Error:', error);
-        window.showToast(`Reimagine failed: ${error.message}`, 'error');
-    } finally {
-        reimagineBtn.disabled = false;
-        reimagineBtn.innerHTML = `<i class="ph-bold ph-sparkle"></i> Reimagine`;
-    }
-};
+                if (!response.ok) {
+                    const errorResult = await response.json();
+                    throw new Error(errorResult.error || `Server error: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                const imageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
+                const newFileName = `Reimagined-${currentUploadedFileName || 'image.jpg'}`;
+                const newFile = new File([imageBlob], newFileName, { type: imageBlob.type });
+                await updateImageStateAfterEdit(newFile, URL.createObjectURL(newFile));
+                window.showToast('Image successfully reimagined!', 'success');
+            } catch (error) {
+                console.error('Reimagine API Error:', error);
+                window.showToast(`Reimagine failed: ${error.message}`, 'error');
+            } finally {
+                reimagineBtn.disabled = false;
+                reimagineBtn.innerHTML = `<i class="ph-bold ph-sparkle"></i> Reimagine`;
+            }
+        };
      
-        // ****** END: UPDATED REIMAGINE FUNCTION ******
-
-       
-               
         function drawOnMask(e) {
             if (!isDrawing) return;
             maskCtx.lineJoin = 'round';
@@ -3330,53 +3245,94 @@ document.addEventListener('DOMContentLoaded', () => {
             removalImageObject.src = enhancedImageSrcForEnhance || originalImageSrcForEnhance;
         }
         
-    async function handleObjectRemoval() {
-    const maskData = maskCtx.getImageData(0, 0, removalMaskCanvas.width, removalMaskCanvas.height);
-    if (![...maskData.data].some(c => c !== 0)) { window.showToast('Please paint a mask over the object to remove.', 'info'); return; }
-    
-    if (removalLoadingOverlay) removalLoadingOverlay.classList.remove('hidden');
-    
-    try {
-        const imageBase64 = removalImageCanvas.toDataURL('image/jpeg').split(',')[1];
-        const maskBase64 = removalMaskCanvas.toDataURL('image/png').split(',')[1];
+        const resizeCanvasForApi = (sourceCanvas, maxPixels) => {
+            const { width, height } = sourceCanvas;
+            const currentPixels = width * height;
 
-        // --- মূল সমাধান: Vercel প্রক্সিকে কল করা হচ্ছে ---
-        const response = await fetch('/api/proxy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                api: "clipdrop-cleanup", // <-- সঠিক API নাম
-                imageBase64: imageBase64,
-                maskBase64: maskBase64
-            })
-        });
+            if (currentPixels <= maxPixels) {
+                const newCanvas = document.createElement('canvas');
+                newCanvas.width = width;
+                newCanvas.height = height;
+                newCanvas.getContext('2d').drawImage(sourceCanvas, 0, 0);
+                return newCanvas;
+            }
 
-        if (!response.ok) {
-            const errorResult = await response.json();
-            throw new Error(errorResult.error || `Server error: ${response.status}`);
-        }
-        
-        const result = await response.json();
-        const resultingImageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
-        removedObjectBlob = resultingImageBlob;
-        
-        if (saveRemovedObjectBtn) saveRemovedObjectBtn.disabled = false;
-        const newSrc = URL.createObjectURL(resultingImageBlob);
-        removalImageObject.onload = () => {
-            removalCtx.clearRect(0, 0, removalImageCanvas.width, removalImageCanvas.height);
-            removalCtx.drawImage(removalImageObject, 0, 0);
+            console.log(`Resizing canvas from ${width}x${height} to fit under ${maxPixels / 1_000_000}MP...`);
+            window.showToast?.('Image is too large, resizing for removal...', 'info');
+
+            const ratio = Math.sqrt(maxPixels / currentPixels);
+            const newWidth = Math.floor(width * ratio);
+            const newHeight = Math.floor(height * ratio);
+
+            const resizedCanvas = document.createElement('canvas');
+            resizedCanvas.width = newWidth;
+            resizedCanvas.height = newHeight;
+            const ctx = resizedCanvas.getContext('2d');
+            ctx.drawImage(sourceCanvas, 0, 0, newWidth, newHeight);
+            
+            return resizedCanvas;
         };
-        removalImageObject.src = newSrc;
-        if (clearMaskBtn) clearMaskBtn.click();
-        window.showToast('Object removed! Click Save & Close to apply.', 'success');
 
-    } catch (error) {
-        console.error('Object Removal Error:', error);
-        window.showToast(`Object removal failed: ${error.message}`, 'error');
-    } finally {
-        if (removalLoadingOverlay) removalLoadingOverlay.classList.add('hidden');
-    }
-}
+        async function handleObjectRemoval() {
+            const maskData = maskCtx.getImageData(0, 0, removalMaskCanvas.width, removalMaskCanvas.height);
+            if (![...maskData.data].some(c => c !== 0)) { 
+                window.showToast?.('Please paint a mask over the object to remove.', 'info'); 
+                return; 
+            }
+            
+            if (removalLoadingOverlay) removalLoadingOverlay.classList.remove('hidden');
+            
+            try {
+                const MAX_PIXELS_CLIPDROP = 16 * 1000 * 1000;
+
+                const resizedImageCanvas = resizeCanvasForApi(removalImageCanvas, MAX_PIXELS_CLIPDROP);
+                const resizedMaskCanvas = resizeCanvasForApi(removalMaskCanvas, MAX_PIXELS_CLIPDROP);
+                
+                const imageBase64 = resizedImageCanvas.toDataURL('image/jpeg').split(',')[1];
+                const maskBase64 = resizedMaskCanvas.toDataURL('image/png').split(',')[1];
+
+                const response = await fetch('/api/proxy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        api: "clipdrop-cleanup",
+                        imageBase64: imageBase64,
+                        maskBase64: maskBase64
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorResult = await response.json();
+                    throw new Error(errorResult.error || `Server error: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                const resultingImageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
+                removedObjectBlob = resultingImageBlob;
+                
+                if (saveRemovedObjectBtn) saveRemovedObjectBtn.disabled = false;
+                const newSrc = URL.createObjectURL(resultingImageBlob);
+                
+                const resultImage = new Image();
+                resultImage.onload = () => {
+                    removalImageCanvas.width = resultImage.width;
+                    removalImageCanvas.height = resultImage.height;
+                    removalCtx.clearRect(0, 0, removalImageCanvas.width, removalImageCanvas.height);
+                    removalCtx.drawImage(resultImage, 0, 0);
+                    removalImageObject.src = newSrc;
+                };
+                resultImage.src = newSrc;
+                
+                if (clearMaskBtn) clearMaskBtn.click();
+                window.showToast?.('Object removed! Click Save & Close to apply.', 'success');
+
+            } catch (error) {
+                console.error('Object Removal Error:', error);
+                window.showToast?.(`Object removal failed: ${error.message}`, 'error');
+            } finally {
+                if (removalLoadingOverlay) removalLoadingOverlay.classList.add('hidden');
+            }
+        }
       
         async function saveAndCloseObjectRemoval() {
             if (!removedObjectBlob) {
@@ -3472,12 +3428,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const setupBatchModal = () => {
            batchQueue = [];
            batchResults = [];
-           batchMetadataResults = []; // <-- এই লাইনটি যোগ করুন
+           batchMetadataResults = [];
            hideBatchPreview();
            updateBatchQueueUI();
            if(batchProgress) batchProgress.textContent = '';
            if(downloadBatchZipBtn) downloadBatchZipBtn.disabled = true;
-           if(downloadMetadataCsvBtn) downloadMetadataCsvBtn.disabled = true; // <-- এই লাইনটি যোগ করুন
+           if(downloadMetadataCsvBtn) downloadMetadataCsvBtn.disabled = true;
            if(startBatchProcessBtn) startBatchProcessBtn.disabled = true;
            batchModal.classList.remove('hidden');
          };
@@ -3547,27 +3503,25 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         };
 
-             const getBatchSettings = () => {
-             const settings = {};
-                   batchSliders.forEach(slider => {
-             const key = slider.id.replace('batch-slider-', '');
-                   settings[key] = parseFloat(slider.value) || 0;
+        const getBatchSettings = () => {
+            const settings = {};
+            batchSliders.forEach(slider => {
+                const key = slider.id.replace('batch-slider-', '');
+                settings[key] = parseFloat(slider.value) || 0;
             });
-                  settings.upscale = batchUpscaleSelect.value;
-                 settings.generateMetadata = batchGenerateMetadata.checked;
-    
-            // START: নতুন ওয়াটারমার্ক সেটিংস
-               settings.addWatermark = batchAddWatermark.checked;
-               settings.watermarkType = document.querySelector('input[name="batchWatermarkType"]:checked').value;
-               settings.watermarkText = batchWatermarkText.value.trim();
-               settings.watermarkImageFile = watermarkFile; // আপলোড করা ফাইল
-               settings.watermarkSize = parseFloat(batchWatermarkSize.value) / 100; // শতাংশকে দশমিকে রূপান্তর
-               settings.watermarkOpacity = parseFloat(batchWatermarkOpacity.value);
-               settings.watermarkPosition = batchWatermarkPosition.value;
-             // END: নতুন ওয়াটারমার্ক সেটিংস
+            settings.upscale = batchUpscaleSelect.value;
+            settings.generateMetadata = batchGenerateMetadata.checked;
 
-             return settings;
-           };
+            settings.addWatermark = batchAddWatermark.checked;
+            settings.watermarkType = document.querySelector('input[name="batchWatermarkType"]:checked').value;
+            settings.watermarkText = batchWatermarkText.value.trim();
+            settings.watermarkImageFile = watermarkFile;
+            settings.watermarkSize = parseFloat(batchWatermarkSize.value) / 100;
+            settings.watermarkOpacity = parseFloat(batchWatermarkOpacity.value);
+            settings.watermarkPosition = batchWatermarkPosition.value;
+
+            return settings;
+        };
 
         async function getBatchAdjustedDataURL(file, settings) {
             if (!isOpenCvReady) {
@@ -3625,91 +3579,82 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         const handleBatchProcess = async () => {
-    if (batchQueue.length === 0) {
-        showToast("Please add images to the queue first.", 'info');
-        return;
-    }
-    
-    const settings = getBatchSettings();
-     
-          logUserAction('batch_process_started', {
+            if (batchQueue.length === 0) {
+                showToast("Please add images to the queue first.", 'info');
+                return;
+            }
+            
+            const settings = getBatchSettings();
+             
+            logUserAction('batch_process_started', {
                 image_count: batchQueue.length,
-                settings: settings // এটি দিয়ে আপনি জানতে পারবেন ব্যবহারকারী কোন সেটিং ব্যবহার করেছে
+                settings: settings
             });
+            
+            // FIX: Removed client-side API key checks. The proxy will handle validation.
+            if (settings.upscale.startsWith('normal_') && !isOpenCvReady) {
+                 showToast('OpenCV is not ready for Normal Upscale.', 'error');
+                 return;
+            }
 
-    const checks = {
-        'normal_2x': { condition: !isOpenCvReady, message: 'OpenCV is not ready for Normal Upscale.' },
-        'normal_4x': { condition: !isOpenCvReady, message: 'OpenCV is not ready for Normal Upscale.' },
-        'ai_2x': { condition: !clipDropApiKey, message: 'ClipDrop API key is required for AI Upscale.' }
-    };
+            startBatchProcessBtn.disabled = true;
+            downloadBatchZipBtn.disabled = true;
+            if(downloadMetadataCsvBtn) downloadMetadataCsvBtn.disabled = true;
+            batchProgress.textContent = "Starting...";
+            batchResults = [];
+            batchMetadataResults = [];
 
-    if (checks[settings.upscale] && checks[settings.upscale].condition) {
-        showToast(checks[settings.upscale].message, 'error');
-        return;
-    }
-   
-
-    startBatchProcessBtn.disabled = true;
-    downloadBatchZipBtn.disabled = true;
-    if(downloadMetadataCsvBtn) downloadMetadataCsvBtn.disabled = true;
-    batchProgress.textContent = "Starting...";
-    batchResults = [];
-    batchMetadataResults = [];
-
-    for (let i = 0; i < batchQueue.length; i++) {
-        const file = batchQueue[i];
-        batchProgress.textContent = `Processing ${i + 1}/${batchQueue.length}: ${file.name}`;
-        try {
-            // ১. মেটাডেটা জেনারেট (যদি সিলেক্ট করা থাকে)
-            if (settings.generateMetadata) {
+            for (let i = 0; i < batchQueue.length; i++) {
+                const file = batchQueue[i];
+                batchProgress.textContent = `Processing ${i + 1}/${batchQueue.length}: ${file.name}`;
                 try {
-                    batchProgress.textContent = `Generating metadata for ${file.name}...`;
-                    const imageBase64Data = await toBase64(file);
-                    const promptText = `Analyze the image and generate SEO-friendly metadata. Provide ONLY a valid JSON object with the keys: 'fileName', 'title', 'keywords' (as an array of max 15 strings), and 'description' (a short, compelling sentence). Example: {"fileName": "red-rose.jpg", "title": "Vibrant Red Rose in Full Bloom", "keywords": ["red rose", "flower", "macro", "nature", "romance"], "description": "A stunning macro shot of a vibrant red rose, capturing the delicate texture of its petals."}`;
-                    const meta = await callGeminiAPI(promptText, imageBase64Data, true);
-                    batchMetadataResults.push({
-                        fileName: file.name,
-                        title: meta.title || '',
-                        keywords: (meta.keywords || []).join(', '),
-                        description: meta.description || ''
-                    });
-                } catch (metaError) {
-                    console.error(`Metadata generation failed for ${file.name}:`, metaError);
-                    showToast(`Metadata failed for ${file.name}.`, 'error');
-                    // একটি খালি এন্ট্রি যোগ করুন যাতে CSV-তে ফাইলের নাম থাকে
-                    batchMetadataResults.push({ fileName: file.name, title: 'ERROR', keywords: '', description: '' });
+                    if (settings.generateMetadata) {
+                        try {
+                            batchProgress.textContent = `Generating metadata for ${file.name}...`;
+                            const imageBase64Data = await toBase64(file);
+                            const promptText = `Analyze the image and generate SEO-friendly metadata. Provide ONLY a valid JSON object with the keys: 'fileName', 'title', 'keywords' (as an array of max 15 strings), and 'description' (a short, compelling sentence). Example: {"fileName": "red-rose.jpg", "title": "Vibrant Red Rose in Full Bloom", "keywords": ["red rose", "flower", "macro", "nature", "romance"], "description": "A stunning macro shot of a vibrant red rose, capturing the delicate texture of its petals."}`;
+                            const meta = await callGeminiAPI(promptText, imageBase64Data, true);
+                            batchMetadataResults.push({
+                                fileName: file.name,
+                                title: meta.title || '',
+                                keywords: (meta.keywords || []).join(', '),
+                                description: meta.description || ''
+                            });
+                        } catch (metaError) {
+                            console.error(`Metadata generation failed for ${file.name}:`, metaError);
+                            showToast(`Metadata failed for ${file.name}.`, 'error');
+                            batchMetadataResults.push({ fileName: file.name, title: 'ERROR', keywords: '', description: '' });
+                        }
+                    }
+
+                    batchProgress.textContent = `Applying adjustments to ${file.name}...`;
+                    let processedBlob = await applyBatchAdjustmentsToBlob(file, settings);
+
+                    if (settings.upscale.startsWith('normal_')) {
+                        processedBlob = await applyBatchNormalUpscale(processedBlob, settings.upscale === 'normal_4x' ? 4 : 2);
+                    } else if (settings.upscale.startsWith('ai_')) {
+                        processedBlob = await applyBatchAIUpscale(file, settings.upscale === 'ai_4x' ? 4 : 2);
+                    }
+
+                    if (settings.addWatermark && ( (settings.watermarkType === 'text' && settings.watermarkText) || (settings.watermarkType === 'image' && settings.watermarkImageFile) )) {
+                        batchProgress.textContent = `Adding watermark to ${file.name}...`;
+                        processedBlob = await applyWatermarkToBlob(processedBlob, settings);
+                    }
+                    
+                    batchResults.push({ name: `processed_${file.name}`, blob: processedBlob });
+
+                } catch (error) {
+                    console.error(`Failed to process ${file.name}:`, error);
+                    showToast(`Skipped ${file.name} due to an error: ${error.message}`, 'error');
                 }
             }
 
-            // ২. ছবি প্রসেস (Adjustments & Upscale)
-            batchProgress.textContent = `Applying adjustments to ${file.name}...`;
-            let processedBlob = await applyBatchAdjustmentsToBlob(file, settings);
+            batchProgress.textContent = `Processing Complete! ${batchResults.length} images processed.`;
+            downloadBatchZipBtn.disabled = batchResults.length === 0;
+            if(downloadMetadataCsvBtn) downloadMetadataCsvBtn.disabled = batchMetadataResults.length === 0;
+            startBatchProcessBtn.disabled = false;
+        };
 
-            if (settings.upscale.startsWith('normal_')) {
-                processedBlob = await applyBatchNormalUpscale(processedBlob, settings.upscale === 'normal_4x' ? 4 : 2);
-            } else if (settings.upscale.startsWith('ai_')) {
-                processedBlob = await applyBatchAIUpscale(processedBlob, settings.upscale === 'ai_4x' ? 4 : 2);
-            }
-
-            // ৩. ওয়াটারমার্ক যোগ (যদি সিলেক্ট করা থাকে)
-            if (settings.addWatermark && ( (settings.watermarkType === 'text' && settings.watermarkText) || (settings.watermarkType === 'image' && settings.watermarkImageFile) )) {
-            batchProgress.textContent = `Adding watermark to ${file.name}...`;
-            processedBlob = await applyWatermarkToBlob(processedBlob, settings);
-         }
-            
-            batchResults.push({ name: `processed_${file.name}`, blob: processedBlob });
-
-        } catch (error) {
-            console.error(`Failed to process ${file.name}:`, error);
-            showToast(`Skipped ${file.name} due to an error.`, 'error');
-        }
-    }
-
-    batchProgress.textContent = `Processing Complete! ${batchResults.length} images processed.`;
-    downloadBatchZipBtn.disabled = batchResults.length === 0;
-    if(downloadMetadataCsvBtn) downloadMetadataCsvBtn.disabled = batchMetadataResults.length === 0;
-    startBatchProcessBtn.disabled = false;
-};
         async function applyBatchAdjustmentsToBlob(file, settings) {
             return new Promise(async (resolve, reject) => {
                 try {
@@ -3750,26 +3695,37 @@ document.addEventListener('DOMContentLoaded', () => {
              });
         }
 
-        async function applyBatchAIUpscale(blob, factor) {
-    const base64Data = await toBase64(new File([blob], "temp.jpg"));
-    
-    const response = await fetch('/api/proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            api: "clipdrop-upscale",
-            base64Data: base64Data
-        })
-    });
+       async function applyBatchAIUpscale(originalFile, factor) {
+            const base64Data = await toBase64(originalFile);
+            
+            const dimensions = await new Promise((resolve, reject) => {
+                const img = new Image();
+                const url = URL.createObjectURL(originalFile);
+                img.onload = () => { URL.revokeObjectURL(url); resolve({ width: img.naturalWidth, height: img.naturalHeight }); };
+                img.onerror = (err) => { URL.revokeObjectURL(url); reject(err); };
+                img.src = url;
+            });
 
-    if (response.ok) {
-        const result = await response.json();
-        return await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
-    } else {
-        const errorResult = await response.json();
-        throw new Error(errorResult.error || `Batch AI Upscale failed: ${response.status}`);
-    }
-}
+            const response = await fetch('/api/proxy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    api: "clipdrop-upscale",
+                    base64Data: base64Data,
+                    factor: factor,
+                    originalWidth: dimensions.width,
+                    originalHeight: dimensions.height
+                })
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                return await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
+            } else {
+                const errorResult = await response.json();
+                throw new Error(errorResult.error || `Batch AI Upscale failed: ${response.status}`);
+            }
+        }
         
         const downloadBatchZip = async () => {
             if (batchResults.length === 0) return;
@@ -3807,7 +3763,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             closeBtn.addEventListener('click', () => {
                 downloadModal.classList.add('hidden');
-                // cleanup any temp context URLs
                 if (window.downloadContext?.src) { URL.revokeObjectURL(window.downloadContext.src); }
                 window.downloadContext = null;
                 fileToDownloadFromRecents = null; 
@@ -3954,7 +3909,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        // --- Super Resolution Modal Logic ---
         const srModal = document.getElementById('superResolutionModal');
         const closeSrModalBtn = document.getElementById('closeSuperResolutionModalBtn');
         const srUploadBox = document.getElementById('srUploadBox');
@@ -3978,31 +3932,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const srSlider = document.getElementById('sr-image-compare-slider');
 
         let srFile = null;
-        let srMode = 'enhance'; // 'enhance' or 'super-resolution'
-        let srScale = null; // 2 or 4
+        let srMode = 'enhance';
+        let srScale = null;
         let srResultBlob = null;
         
-               const setupSuperResolutionModal = () => {
+        const setupSuperResolutionModal = () => {
             srFile = currentFileObject;
             srResultBlob = null;
             srMode = 'enhance';
             srScale = null;
             
-            // Reset UI
             srInitialState.style.display = 'block';
             srLoadingState.classList.add('hidden');
             srCompareContainer.classList.add('hidden');
             srDownloadBtn.disabled = true;
             srGenerateBtn.disabled = !srFile;
 
-            // Mode buttons
             srModeEnhance.classList.add('bg-purple-700');
             srModeEnhance.classList.remove('bg-gray-700');
             srModeSuperResolution.classList.remove('bg-purple-700');
             srModeSuperResolution.classList.add('bg-gray-700');
             srScaleContainer.style.display = 'none';
 
-            // Scale buttons
             [srScale2x, srScale4x].forEach(btn => {
                 btn.classList.remove('bg-purple-700');
                 btn.classList.add('bg-gray-700');
@@ -4011,23 +3962,23 @@ document.addEventListener('DOMContentLoaded', () => {
             if (srFile) {
                 const url = URL.createObjectURL(srFile);
                 srUploadPreview.src = url;
-                srUploadPreviewContainer.classList.remove('hidden'); // Use container
+                srUploadPreviewContainer.classList.remove('hidden');
                 srUploadBox.classList.add('hidden');
                 srBeforeImage.src = url;
             } else {
-                srUploadPreviewContainer.classList.add('hidden'); // Use container
+                srUploadPreviewContainer.classList.add('hidden');
                 srUploadBox.classList.remove('hidden');
             }
 
             srModal.classList.remove('hidden');
         };
         
-                const handleSrFileSelect = (file) => {
+        const handleSrFileSelect = (file) => {
             if (file && file.type.startsWith('image/')) {
                 srFile = file;
                 const url = URL.createObjectURL(file);
                 srUploadPreview.src = url;
-                srUploadPreviewContainer.classList.remove('hidden'); // Use container
+                srUploadPreviewContainer.classList.remove('hidden');
                 srUploadBox.classList.add('hidden');
                 srBeforeImage.src = url;
                 srGenerateBtn.disabled = false;
@@ -4039,12 +3990,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast('OpenCV is not ready. Please wait a moment.', 'info');
                 return;
             }
-
             if (!srFile) {
                 showToast('Please upload an image first.', 'error');
                 return;
             }
-
             if (srMode === 'super-resolution' && !srScale) {
                 showToast('Please select a scale (2X or 4X).', 'info');
                 return;
@@ -4057,7 +4006,6 @@ document.addEventListener('DOMContentLoaded', () => {
             srDownloadBtn.disabled = true;
 
             try {
-                // Load image into a canvas
                 const imgUrl = srUploadPreview?.src || URL.createObjectURL(srFile);
                 const img = await new Promise((resolve, reject) => {
                     const im = new Image();
@@ -4073,12 +4021,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const tmpCtx = tmpCanvas.getContext('2d');
                 tmpCtx.drawImage(img, 0, 0);
 
-                // OpenCV processing
                 let src = cv.imread(tmpCanvas);
                 if (!src || src.empty?.()) {
                     throw new Error('Could not read image. Try a smaller image or different format.');
                 }
-                // Ensure 3-channel RGB (medianBlur/other ops are more stable on 8UC3)
                 if (src.type() === cv.CV_8UC4) {
                     let rgb = new cv.Mat();
                     cv.cvtColor(src, rgb, cv.COLOR_RGBA2RGB);
@@ -4086,18 +4032,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     src = rgb;
                 }
 
-                // Safety limits (only on real mobile unless user forces full output)
-                // Use userAgent detection so Desktop DevTools mobile view is not treated as mobile.
                 const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
                 const forceFull = !!srForceFull?.checked;
                 const capsEnabled = isMobile && !forceFull;
-                const MAX_LONG_SIDE = capsEnabled ? 1536 : 8192; // effectively no cap when disabled
-                const MAX_PIXELS = capsEnabled ? 2_500_000 : 64_000_000; // generous when disabled
+                const MAX_LONG_SIDE = capsEnabled ? 1536 : 8192;
+                const MAX_PIXELS = capsEnabled ? 2_500_000 : 64_000_000;
 
                 let work = new cv.Mat();
                 let base = src;
 
-                // If source itself is too large, downscale first (only if caps are enabled)
                 const srcLong = Math.max(base.cols, base.rows);
                 const srcArea = base.cols * base.rows;
                 if (capsEnabled && (srcLong > MAX_LONG_SIDE || srcArea > MAX_PIXELS)) {
@@ -4105,13 +4048,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     let downsized = new cv.Mat();
                     cv.resize(base, downsized, new cv.Size(0, 0), scale, scale, cv.INTER_AREA);
                     if (base !== src) base.delete();
-                    base = downsized; // now smaller
+                    base = downsized;
                 }
 
                 let wasCapped = false;
                 if (srMode === 'super-resolution') {
                     const factor = srScale === 4 ? 4 : 2;
-                    // Predict target and cap if needed
                     const targetW0 = base.cols * factor;
                     const targetH0 = base.rows * factor;
                     const targetLong0 = Math.max(targetW0, targetH0);
@@ -4131,17 +4073,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (base !== src) base.delete();
 
-                // Unsharp mask: sharpen details
                 let blurred = new cv.Mat();
                 let sharpened = new cv.Mat();
-                const ksize = new cv.Size(0, 0);
-                // Use lighter sharpening on mobile to reduce memory/compute pressure
                 const sharpenAlpha = isMobile ? 1.2 : 1.5;
                 const blurSigma = isMobile ? 0.8 : 0;
                 cv.GaussianBlur(work, blurred, new cv.Size(3, 3), blurSigma, blurSigma, cv.BORDER_DEFAULT);
                 cv.addWeighted(work, sharpenAlpha, blurred, -(sharpenAlpha - 1), 0, sharpened);
 
-                // Optionally light denoise for upscaled images
                 if (srMode === 'super-resolution') {
                     let denoised = new cv.Mat();
                     cv.medianBlur(sharpened, denoised, 3);
@@ -4149,7 +4087,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     sharpened = denoised;
                 }
 
-                // Render to canvas and create Blob (cap canvas size further on mobile)
                 const MAX_CANVAS_PIXELS = capsEnabled ? 2_000_000 : 67_000_000;
                 let renderMat = sharpened;
                 const area = sharpened.cols * sharpened.rows;
@@ -4166,7 +4103,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     cv.imshow(outCanvas, renderMat);
                 } catch (e) {
-                    // Fallback: try another scale down if the canvas or WebGL fails
                     const area2 = renderMat.cols * renderMat.rows;
                     const scale2 = Math.min(0.75, Math.sqrt(MAX_CANVAS_PIXELS / (area2 + 1)));
                     if (scale2 < 1.0) {
@@ -4182,7 +4118,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 if (renderMat !== sharpened) renderMat.delete();
 
-                // Use JPEG on mobile to reduce memory usage during encoding
                 const mime = capsEnabled ? 'image/jpeg' : 'image/png';
                 const quality = isMobile ? 0.92 : 1.0;
                 srResultBlob = await new Promise((resolve) => outCanvas.toBlob(resolve, mime, quality));
@@ -4198,7 +4133,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     showToast('Processing complete!', 'success');
                 }
 
-                // Cleanup
                 src.delete();
                 work.delete();
                 blurred.delete();
@@ -4214,7 +4148,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        // আপলোড রিসেট করার জন্য ফাংশন
         const resetSrUpload = () => {
             srFile = null;
             srResultBlob = null;
@@ -4224,7 +4157,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (srGenerateBtn) srGenerateBtn.disabled = true;
             if (srDownloadBtn) srDownloadBtn.disabled = true;
             
-            // ডান পাশের প্রিভিউ প্যানেল রিসেট করুন
             if (srInitialState) srInitialState.style.display = 'block';
             if (srCompareContainer) srCompareContainer.classList.add('hidden');
             if (srLoadingState) srLoadingState.classList.add('hidden');
@@ -4232,95 +4164,89 @@ document.addEventListener('DOMContentLoaded', () => {
             if (srAfterImage) srAfterImage.src = '';
         };
       
-             // START: NEW HELPER FUNCTIONS
+        async function applyWatermarkToBlob(blob, settings) {
+            if (!settings.addWatermark) return blob;
 
-            async function applyWatermarkToBlob(blob, settings) {
-    if (!settings.addWatermark) return blob;
+            const mainImage = await new Promise((resolve, reject) => {
+                const img = new Image();
+                const url = URL.createObjectURL(blob);
+                img.crossOrigin = "Anonymous";
+                img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+                img.onerror = (err) => { URL.revokeObjectURL(url); reject(err); };
+                img.src = url;
+            });
 
-    const mainImage = await new Promise((resolve, reject) => {
-        const img = new Image();
-        const url = URL.createObjectURL(blob);
-        img.crossOrigin = "Anonymous";
-        img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
-        img.onerror = (err) => { URL.revokeObjectURL(url); reject(err); };
-        img.src = url;
-    });
+            const canvas = document.createElement('canvas');
+            canvas.width = mainImage.width;
+            canvas.height = mainImage.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(mainImage, 0, 0);
+            ctx.globalAlpha = settings.watermarkOpacity;
 
-    const canvas = document.createElement('canvas');
-    canvas.width = mainImage.width;
-    canvas.height = mainImage.height;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(mainImage, 0, 0);
+            if (settings.watermarkType === 'text' && settings.watermarkText) {
+                const fontSize = Math.max(12, mainImage.width * (settings.watermarkSize / 1.5));
+                const padding = fontSize / 2;
+                ctx.font = `bold ${fontSize}px Arial`;
+                ctx.fillStyle = `rgba(255, 255, 255, 1)`;
+                ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+                ctx.shadowBlur = 7;
 
-    // অপাসিটি সেট করুন
-    ctx.globalAlpha = settings.watermarkOpacity;
+                let x, y;
+                switch (settings.watermarkPosition) {
+                    case 'bottom-left':
+                        ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+                        x = padding; y = canvas.height - padding;
+                        break;
+                    case 'top-right':
+                        ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+                        x = canvas.width - padding; y = padding;
+                        break;
+                    case 'top-left':
+                        ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+                        x = padding; y = padding;
+                        break;
+                    case 'center':
+                        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                        x = canvas.width / 2; y = canvas.height / 2;
+                        break;
+                    default:
+                        ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+                        x = canvas.width - padding; y = canvas.height - padding;
+                        break;
+                }
+                ctx.fillText(settings.watermarkText, x, y);
+            }
+            else if (settings.watermarkType === 'image' && settings.watermarkImageFile) {
+                const watermarkImg = await new Promise((resolve, reject) => {
+                    const img = new Image();
+                    const url = URL.createObjectURL(settings.watermarkImageFile);
+                    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+                    img.onerror = (err) => { URL.revokeObjectURL(url); reject(err); };
+                    img.src = url;
+                });
 
-    // টেক্সট ওয়াটারমার্ক
-    if (settings.watermarkType === 'text' && settings.watermarkText) {
-        const fontSize = Math.max(12, mainImage.width * (settings.watermarkSize / 1.5)); // টেক্সটের জন্য সাইজ একটু ভিন্নভাবে গণনা
-        const padding = fontSize / 2;
-        ctx.font = `bold ${fontSize}px Arial`;
-        ctx.fillStyle = `rgba(255, 255, 255, 1)`; // অপাসিটি globalAlpha দিয়ে নিয়ন্ত্রিত
-        ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
-        ctx.shadowBlur = 7;
+                const wRatio = (mainImage.width * settings.watermarkSize) / watermarkImg.width;
+                const hRatio = (mainImage.height * settings.watermarkSize) / watermarkImg.height;
+                const ratio = Math.min(wRatio, hRatio);
 
-        let x, y;
-        switch (settings.watermarkPosition) {
-            case 'bottom-left':
-                ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
-                x = padding; y = canvas.height - padding;
-                break;
-            case 'top-right':
-                ctx.textAlign = 'right'; ctx.textBaseline = 'top';
-                x = canvas.width - padding; y = padding;
-                break;
-            case 'top-left':
-                ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-                x = padding; y = padding;
-                break;
-            case 'center':
-                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-                x = canvas.width / 2; y = canvas.height / 2;
-                break;
-            default: // bottom-right
-                ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
-                x = canvas.width - padding; y = canvas.height - padding;
-                break;
-        }
-        ctx.fillText(settings.watermarkText, x, y);
-    }
-    // ইমেজ ওয়াটারমার্ক
-    else if (settings.watermarkType === 'image' && settings.watermarkImageFile) {
-        const watermarkImg = await new Promise((resolve, reject) => {
-            const img = new Image();
-            const url = URL.createObjectURL(settings.watermarkImageFile);
-            img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
-            img.onerror = (err) => { URL.revokeObjectURL(url); reject(err); };
-            img.src = url;
-        });
+                const w = watermarkImg.width * ratio;
+                const h = watermarkImg.height * ratio;
+                const padding = w * 0.1;
 
-        const wRatio = (mainImage.width * settings.watermarkSize) / watermarkImg.width;
-        const hRatio = (mainImage.height * settings.watermarkSize) / watermarkImg.height;
-        const ratio = Math.min(wRatio, hRatio);
+                let x, y;
+                switch (settings.watermarkPosition) {
+                    case 'bottom-left': x = padding; y = canvas.height - h - padding; break;
+                    case 'top-right': x = canvas.width - w - padding; y = padding; break;
+                    case 'top-left': x = padding; y = padding; break;
+                    case 'center': x = (canvas.width - w) / 2; y = (canvas.height - h) / 2; break;
+                    default:
+                        x = canvas.width - w - padding; y = canvas.height - h - padding; break;
+                }
+                ctx.drawImage(watermarkImg, x, y, w, h);
+            }
 
-        const w = watermarkImg.width * ratio;
-        const h = watermarkImg.height * ratio;
-        const padding = w * 0.1; // প্যাডিং ইমেজের আকারের উপর ভিত্তি করে
-
-        let x, y;
-        switch (settings.watermarkPosition) {
-            case 'bottom-left': x = padding; y = canvas.height - h - padding; break;
-            case 'top-right': x = canvas.width - w - padding; y = padding; break;
-            case 'top-left': x = padding; y = padding; break;
-            case 'center': x = (canvas.width - w) / 2; y = (canvas.height - h) / 2; break;
-            default: // bottom-right
-                x = canvas.width - w - padding; y = canvas.height - h - padding; break;
-        }
-        ctx.drawImage(watermarkImg, x, y, w, h);
-    }
-
-    return new Promise(resolve => canvas.toBlob(resolve, blob.type, 0.95));
-}     
+            return new Promise(resolve => canvas.toBlob(resolve, blob.type, 0.95));
+        }     
       
       
 const downloadMetadataCsv = () => {
@@ -4358,117 +4284,106 @@ const downloadMetadataCsv = () => {
     showToast('Metadata exported as CSV.');
 };
 
-// END: NEW HELPER FUNCTIONS
-
     // --- Event Listeners ---
     if (batchBtn) batchBtn.addEventListener('click', setupBatchModal);
-    // Ensure safe lookup for manageApiKeysBtn (may not exist in this layout)
     const manageApiKeysBtn = document.getElementById('manageApiKeysBtn');
     if (manageApiKeysBtn) manageApiKeysBtn.addEventListener('click', () => apiKeyModal.classList.remove('hidden'));
-        if (closeApiKeyModalBtn) closeApiKeyModalBtn.addEventListener('click', () => apiKeyModal.classList.add('hidden'));
-        if (saveApiKeysBtn) saveApiKeysBtn.addEventListener('click', () => { window.showToast?.('Saving keys...', 'info'); saveApiKeys(); });
-        if (analyzeBtn) analyzeBtn.addEventListener('click', handleAnalyze);
-        if (enhanceBtn) enhanceBtn.addEventListener('click', handleEnhance);
-        if (metadataBtn) metadataBtn.addEventListener('click', handleGetMetadata);
-        if (promptBtn) promptBtn.addEventListener('click', handleGetPrompt);
-        if (superResolutionBtn) superResolutionBtn.addEventListener('click', setupSuperResolutionModal);
-        if (localVariationsBtn) localVariationsBtn.addEventListener('click', () => {
-            if (!imageBase64) { window.showToast?.('Load an image first.', 'info'); return; }
-            if (!window.isOpenCvReady) { window.showToast?.('OpenCV is still loading. Please wait.', 'info'); return; }
-            if (lvGrid) lvGrid.innerHTML = '';
-            lvResults = [];
-            if (lvEmpty) lvEmpty.classList.remove('hidden');
-            if (localVariationsModal) localVariationsModal.classList.remove('hidden');
-        });
-        if (closeLocalVariationsModalBtn) closeLocalVariationsModalBtn.addEventListener('click', () => localVariationsModal.classList.add('hidden'));
+    if (closeApiKeyModalBtn) closeApiKeyModalBtn.addEventListener('click', () => apiKeyModal.classList.add('hidden'));
+    if (saveApiKeysBtn) saveApiKeysBtn.addEventListener('click', () => { window.showToast?.('Saving keys...', 'info'); saveApiKeys(); });
+    if (analyzeBtn) analyzeBtn.addEventListener('click', handleAnalyze);
+    if (enhanceBtn) enhanceBtn.addEventListener('click', handleEnhance);
+    if (metadataBtn) metadataBtn.addEventListener('click', handleGetMetadata);
+    if (promptBtn) promptBtn.addEventListener('click', handleGetPrompt);
+    if (superResolutionBtn) superResolutionBtn.addEventListener('click', setupSuperResolutionModal);
+    if (localVariationsBtn) localVariationsBtn.addEventListener('click', () => {
+        if (!imageBase64) { window.showToast?.('Load an image first.', 'info'); return; }
+        if (!window.isOpenCvReady) { window.showToast?.('OpenCV is still loading. Please wait.', 'info'); return; }
+        if (lvGrid) lvGrid.innerHTML = '';
+        lvResults = [];
+        if (lvEmpty) lvEmpty.classList.remove('hidden');
+        if (localVariationsModal) localVariationsModal.classList.remove('hidden');
+    });
+    if (closeLocalVariationsModalBtn) closeLocalVariationsModalBtn.addEventListener('click', () => localVariationsModal.classList.add('hidden'));
       
-      // --- নতুন Event Listener (এখানে পেস্ট করুন) ---
-if (copyPromptBtn) {
-    copyPromptBtn.addEventListener('click', () => {
-        // বাটন ক্লিকের সময় এলিমেন্ট এবং তার টেক্সট আবার খুঁজে বের করা হচ্ছে
-        const promptElement = document.getElementById('promptContent');
-        if (promptElement) {
-            const textToCopy = promptElement.textContent.trim();
-            const defaultText = "Click the button to generate a prompt.";
-
-            // টেক্সট খালি বা ডিফল্ট টেক্সট কি না তা পরীক্ষা করা হচ্ছে
-            if (textToCopy && textToCopy !== defaultText) {
-                copyToClipboard(textToCopy, 'Prompt');
-            } else {
-                if (window.showToast) {
-                    window.showToast('There is no prompt to copy.', 'info');
+    if (copyPromptBtn) {
+        copyPromptBtn.addEventListener('click', () => {
+            const promptElement = document.getElementById('promptContent');
+            if (promptElement) {
+                const textToCopy = promptElement.textContent.trim();
+                const defaultText = "Click the button to generate a prompt.";
+                if (textToCopy && textToCopy !== defaultText) {
+                    copyToClipboard(textToCopy, 'Prompt');
+                } else {
+                    if (window.showToast) {
+                        window.showToast('There is no prompt to copy.', 'info');
+                    }
                 }
-            }
-        } else {
-            console.error("promptContent element not found on click!");
-        }
-    });
-}
-
-            // START: NEW EVENT LISTENERS
-if (downloadMetadataCsvBtn) {
-    downloadMetadataCsvBtn.addEventListener('click', downloadMetadataCsv);
-}
-if (batchAddWatermark) {
-    batchAddWatermark.addEventListener('change', () => {
-        if (batchAddWatermark.checked) {
-            batchWatermarkOptions.classList.remove('hidden');
-        } else {
-            batchWatermarkOptions.classList.add('hidden');
-        }
-    });
-}
-if (batchWatermarkOpacity) {
-    batchWatermarkOpacity.addEventListener('input', () => {
-        if (batchWatermarkOpacityValue) {
-            batchWatermarkOpacityValue.textContent = batchWatermarkOpacity.value;
-        }
-    });
-}
-// END: NEW EVENT LISTENERS
-      
-      // START: NEW WATERMARK EVENT LISTENERS
-if (batchAddWatermark) {
-    batchAddWatermark.addEventListener('change', () => {
-        batchWatermarkOptions.classList.toggle('hidden', !batchAddWatermark.checked);
-    });
-}
-if (batchWatermarkTypeRadios) {
-    batchWatermarkTypeRadios.forEach(radio => {
-        radio.addEventListener('change', () => {
-            if (radio.value === 'text') {
-                batchWatermarkTextOptions.classList.remove('hidden');
-                batchWatermarkImageOptions.classList.add('hidden');
             } else {
-                batchWatermarkTextOptions.classList.add('hidden');
-                batchWatermarkImageOptions.classList.remove('hidden');
+                console.error("promptContent element not found on click!");
             }
         });
-    });
-}
-if (batchWatermarkImageBtn) {
-    batchWatermarkImageBtn.addEventListener('click', () => batchWatermarkImageUpload.click());
-}
-if (batchWatermarkImageUpload) {
-    batchWatermarkImageUpload.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            watermarkFile = file;
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                batchWatermarkPreview.src = event.target.result;
-                batchWatermarkPreview.classList.remove('hidden');
-            };
-            reader.readAsDataURL(file);
-        }
-    });
-}
-if (batchWatermarkSize) {
-    batchWatermarkSize.addEventListener('input', () => {
-        if (batchWatermarkSizeValue) batchWatermarkSizeValue.textContent = batchWatermarkSize.value;
-    });
-}
-// END: NEW WATERMARK EVENT LISTENERS
+    }
+
+    if (downloadMetadataCsvBtn) {
+        downloadMetadataCsvBtn.addEventListener('click', downloadMetadataCsv);
+    }
+    if (batchAddWatermark) {
+        batchAddWatermark.addEventListener('change', () => {
+            if (batchAddWatermark.checked) {
+                batchWatermarkOptions.classList.remove('hidden');
+            } else {
+                batchWatermarkOptions.classList.add('hidden');
+            }
+        });
+    }
+    if (batchWatermarkOpacity) {
+        batchWatermarkOpacity.addEventListener('input', () => {
+            if (batchWatermarkOpacityValue) {
+                batchWatermarkOpacityValue.textContent = batchWatermarkOpacity.value;
+            }
+        });
+    }
+      
+    if (batchAddWatermark) {
+        batchAddWatermark.addEventListener('change', () => {
+            batchWatermarkOptions.classList.toggle('hidden', !batchAddWatermark.checked);
+        });
+    }
+    if (batchWatermarkTypeRadios) {
+        batchWatermarkTypeRadios.forEach(radio => {
+            radio.addEventListener('change', () => {
+                if (radio.value === 'text') {
+                    batchWatermarkTextOptions.classList.remove('hidden');
+                    batchWatermarkImageOptions.classList.add('hidden');
+                } else {
+                    batchWatermarkTextOptions.classList.add('hidden');
+                    batchWatermarkImageOptions.classList.remove('hidden');
+                }
+            });
+        });
+    }
+    if (batchWatermarkImageBtn) {
+        batchWatermarkImageBtn.addEventListener('click', () => batchWatermarkImageUpload.click());
+    }
+    if (batchWatermarkImageUpload) {
+        batchWatermarkImageUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                watermarkFile = file;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    batchWatermarkPreview.src = event.target.result;
+                    batchWatermarkPreview.classList.remove('hidden');
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+    if (batchWatermarkSize) {
+        batchWatermarkSize.addEventListener('input', () => {
+            if (batchWatermarkSizeValue) batchWatermarkSizeValue.textContent = batchWatermarkSize.value;
+        });
+    }
       
         async function generateLocalVariations() {
             if (!window.isOpenCvReady) { window.showToast?.('OpenCV is not ready.', 'error'); return; }
@@ -4479,15 +4394,12 @@ if (batchWatermarkSize) {
             const seedVal = lvSeedInput?.value ? parseInt(lvSeedInput.value, 10) : null;
             const sizeOpt = lvSizeSelect?.value || '1024';
 
-            // Seeded RNG
             let seed = seedVal ?? Math.floor(Math.random() * 1e9);
             const rng = () => {
-                // simple LCG
                 seed = (1664525 * seed + 1013904223) % 4294967296;
                 return seed / 4294967296;
             };
 
-            // Load source image into canvas
             const srcUrl = imagePreview?.src || originalImageSrcForEnhance;
             const img = await new Promise((resolve, reject) => {
                 const im = new Image();
@@ -4503,7 +4415,6 @@ if (batchWatermarkSize) {
 
             const srcMat = cv.imread(baseCanvas);
 
-            // Compute output size
             let targetW = srcMat.cols, targetH = srcMat.rows;
             if (sizeOpt !== 'original') {
                 const longSide = parseInt(sizeOpt, 10);
@@ -4521,23 +4432,18 @@ if (batchWatermarkSize) {
 
             for (let i = 0; i < count; i++) {
                 try {
-                    // Start from resized base (no random transform; keep details same)
                     let base = new cv.Mat();
                     cv.resize(srcMat, base, new cv.Size(targetW, targetH), 0, 0, cv.INTER_AREA);
-                    // Ensure 3-channel RGB (cv.imread(canvas) gives RGBA). Multiply requires same channels.
                     let baseRGB = new cv.Mat();
                     if (base.type() === cv.CV_8UC4) {
                         cv.cvtColor(base, baseRGB, cv.COLOR_RGBA2RGB);
                         base.delete();
                     } else {
-                        // safe copy when already 3-channel
                         base.copyTo(baseRGB);
                         base.delete();
                     }
 
-                    // Build a black vignette mask using a simple radial falloff
-                    // Center ~1, edges ~ (1 - edgeDarkness)
-                    const edgeDarkness = 0.65 * intensity; // High adds more black, Low adds a bit
+                    const edgeDarkness = 0.65 * intensity;
                     let mask = cv.Mat.zeros(baseRGB.rows, baseRGB.cols, cv.CV_32FC1);
                     const cx = baseRGB.cols * 0.5, cy = baseRGB.rows * 0.5;
                     const maxR = Math.hypot(cx, cy);
@@ -4545,13 +4451,12 @@ if (batchWatermarkSize) {
                         const row = mask.floatPtr(y2);
                         const dy = y2 - cy;
                         for (let x2 = 0; x2 < mask.cols; x2++) {
-                            const d = Math.hypot(x2 - cx, dy) / maxR; // 0 center -> 1 corners
+                            const d = Math.hypot(x2 - cx, dy) / maxR;
                             const v = Math.max(0.0, 1.0 - edgeDarkness * d);
                             row[x2] = v;
                         }
                     }
 
-                    // Apply mask: multiply image by 3-channel mask
                     let base32 = new cv.Mat(); baseRGB.convertTo(base32, cv.CV_32FC3, 1/255);
                     let mask3 = cv.Mat.zeros(mask.rows, mask.cols, cv.CV_32FC3);
                     let ch = new cv.MatVector();
@@ -4560,10 +4465,8 @@ if (batchWatermarkSize) {
                     let vApplied = new cv.Mat();
                     cv.multiply(base32, mask3, vApplied);
                     let finalMat = new cv.Mat(); vApplied.convertTo(finalMat, cv.CV_8UC3, 255);
-                    // Cleanup temps used before rendering
                     baseRGB.delete(); base32.delete(); mask3.delete(); ch.delete(); vApplied.delete(); mask.delete();
 
-                    // To canvas & blob
                     const canvas = document.createElement('canvas');
                     canvas.width = finalMat.cols; canvas.height = finalMat.rows;
                     cv.imshow(canvas, finalMat);
@@ -4573,7 +4476,6 @@ if (batchWatermarkSize) {
                     const url = URL.createObjectURL(blob);
                     lvResults.push({ blob, url, name: `${(currentFileObject?.name || 'image').replace(/\.[^/.]+$/, '')}_var_${i+1}.jpg` });
 
-                    // Render card
                     if (lvGrid) {
                         const card = document.createElement('div');
                         card.className = 'relative group border border-gray-700 rounded-md overflow-hidden';
@@ -4588,7 +4490,7 @@ if (batchWatermarkSize) {
                         const a = document.createElement('a');
                         a.href = url; a.download = lvResults[i].name; document.body.appendChild(a); a.click(); document.body.removeChild(a);
                         });
-                      } // <-- এই বন্ধনীটি যোগ করুন
+                      }
 
 
                    if (lvProgress) lvProgress.textContent = `Generated ${i+1}/${count}`;
@@ -4606,7 +4508,6 @@ if (batchWatermarkSize) {
         if (lvGenerateBtn) lvGenerateBtn.addEventListener('click', generateLocalVariations);
         if (lvDownloadAllBtn) lvDownloadAllBtn.addEventListener('click', () => {
             if (!lvResults.length) return;
-            // Trigger individual downloads (no ZIP dependency)
             lvResults.forEach((item, idx) => {
                 setTimeout(() => {
                     const a = document.createElement('a'); a.href = item.url; a.download = item.name; document.body.appendChild(a); a.click(); document.body.removeChild(a);
@@ -5062,13 +4963,16 @@ if (batchWatermarkSize) {
             });
         }
 
-        if (startBatchProcessBtn) startBatchProcessBtn.addEventListener('click', handleBatchProcess);
+       if (startBatchProcessBtn) startBatchProcessBtn.addEventListener('click', handleBatchProcess);
         if (downloadBatchZipBtn) downloadBatchZipBtn.addEventListener('click', downloadBatchZip);
         
         batchSliders.forEach(slider => {
             slider.addEventListener('input', e => {
                 const valEl = document.getElementById(`batchSliderVal-${e.target.id.split('-')[2]}`);
                 if (valEl) valEl.textContent = e.target.value;
+            });
+
+            slider.addEventListener('change', e => {
                 if (currentBatchPreviewIndex !== null) {
                     showBatchPreview(currentBatchPreviewIndex);
                 }
@@ -5137,7 +5041,6 @@ if (batchWatermarkSize) {
             }
         }
         
-        // Super Resolution Modal Event Listeners
         if(closeSrModalBtn) closeSrModalBtn.addEventListener('click', () => srModal.classList.add('hidden'));
         if(srUploadBox) srUploadBox.addEventListener('click', () => srImageUpload.click());
         if(srImageUpload) srImageUpload.addEventListener('change', (e) => handleSrFileSelect(e.target.files[0]));
@@ -5207,53 +5110,26 @@ if (batchWatermarkSize) {
                 srAfterImage.style.width = `${containerWidth}px`;
             }
         });
-
        
-        
-       
-      
-        // Initialize API keys
         const initializeApiKeys = () => {
-            const geminiApiKey = localStorage.getItem('geminiApiKey');
-            const clipDropApiKey = localStorage.getItem('clipDropApiKey');
-            
-            // Set input values if they exist
             const geminiApiKeyInput = document.getElementById('geminiApiKeyInput');
             const clipdropApiKeyInput = document.getElementById('clipdropApiKeyInput');
             
-            if (geminiApiKeyInput) geminiApiKeyInput.value = geminiApiKey || '';
-            if (clipdropApiKeyInput) clipdropApiKeyInput.value = clipDropApiKey || '';
+            if (geminiApiKeyInput) geminiApiKeyInput.value = localStorage.getItem('geminiApiKey') || '';
+            if (clipdropApiKeyInput) clipdropApiKeyInput.value = localStorage.getItem('clipDropApiKey') || '';
+        };
 
-            // Add API key input event listeners
+        const saveApiKeys = () => {
+            const geminiApiKeyInput = document.getElementById('geminiApiKeyInput');
+            const clipdropApiKeyInput = document.getElementById('clipdropApiKeyInput');
             if (geminiApiKeyInput) {
-                geminiApiKeyInput.addEventListener('change', () => {
-                    const newKey = geminiApiKeyInput.value.trim();
-                    localStorage.setItem('geminiApiKey', newKey);
-                    if (newKey) {
-                        window.showToast?.('Gemini API key saved', 'success');
-                    }
-                });
+                localStorage.setItem('geminiApiKey', geminiApiKeyInput.value.trim());
             }
-
             if (clipdropApiKeyInput) {
-                clipdropApiKeyInput.addEventListener('change', () => {
-                    const newKey = clipdropApiKeyInput.value.trim();
-                    localStorage.setItem('clipDropApiKey', newKey);
-                    if (newKey) {
-                        window.showToast?.('ClipDrop API key saved', 'success');
-                    }
-                });
+                localStorage.setItem('clipDropApiKey', clipdropApiKeyInput.value.trim());
             }
-
-            // Check if API keys are missing and show notification
-            if (!geminiApiKey) {
-                window.showToast?.('Gemini API key is missing. Please set it in the settings.', 'warning');
-                // Open settings modal automatically if API key is missing
-                const manageApiKeysBtn = document.getElementById('manageApiKeysBtn');
-                if (manageApiKeysBtn) {
-                    manageApiKeysBtn.click();
-                }
-            }
+            window.showToast?.('API keys saved!', 'success');
+            apiKeyModal.classList.add('hidden');
         };
 
         loadRecentFiles();
@@ -5317,11 +5193,10 @@ if (batchWatermarkSize) {
                 profileDropdown.classList.add('hidden');
             }
 
-            // Update mobile quick auth action
             if (!window.refreshMobileAuthQuick) {
                 window.refreshMobileAuthQuick = function() {
                     const container = document.getElementById('mobile-auth-quick');
-                    if (!container) return; // Mobile menu may not be built yet
+                    if (!container) return;
                     if (currentUser) {
                         const aurl = currentUser.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.user_metadata?.full_name || currentUser.email)}&background=random`;
                         container.innerHTML = `
@@ -5330,13 +5205,11 @@ if (batchWatermarkSize) {
                                 <span>Profile</span>
                             </button>
                         `;
-                        // Open the same profile dropdown as desktop
                         const btn = document.getElementById('mobile-profile-btn');
                         btn?.addEventListener('click', (e) => {
                             e.stopPropagation();
                             const pd = document.getElementById('profile-dropdown');
                             pd?.classList.toggle('hidden');
-                            // Also close the mobile menu if open
                             const mm = document.getElementById('mobile-menu-content');
                             if (mm && mm.classList.contains('flex')) { mm.classList.add('hidden'); mm.classList.remove('flex'); }
                         });
@@ -5355,7 +5228,6 @@ if (batchWatermarkSize) {
                     }
                 };
             }
-            // Try to refresh mobile quick UI now (mobile menu might not exist yet; safe no-op)
             window.refreshMobileAuthQuick();
         }
 
@@ -5372,8 +5244,6 @@ if (batchWatermarkSize) {
             });
         }
       
-      // ****** নতুন কোডটি এখানে যুক্ত করুন ******
-        // --- Supabase Helper Functions ---
         async function logUserAction(action, details) {
           try {
             const { data: { user } } = await supabase.auth.getUser();
@@ -5396,9 +5266,7 @@ if (batchWatermarkSize) {
           }
         }
 
-        // ফাংশনটিকে গ্লোবাল স্কোপে যুক্ত করুন
         window.logUserAction = logUserAction;
-        // ****** নতুন কোড যুক্ত করা শেষ ******
 
         async function signInWithProvider(provider) {
             authErrorEl.textContent = '';
@@ -5449,7 +5317,6 @@ if (batchWatermarkSize) {
             }
         });
 
-        // Fallback: delegated handler in case direct binding fails
         document.addEventListener('click', (e) => {
             const btn = e.target.closest && e.target.closest('#saveApiKeysBtn');
             if (btn) {
@@ -5476,10 +5343,8 @@ if (batchWatermarkSize) {
     });
     </script>
   
-   <!-- START: NEW SCRIPT FOR FOOTER MODALS -->
     <script>
     document.addEventListener('DOMContentLoaded', () => {
-        // Function to open a modal
         const openModal = (modalId) => {
             const modal = document.getElementById(modalId);
             if (modal) {
@@ -5487,7 +5352,6 @@ if (batchWatermarkSize) {
             }
         };
 
-        // Function to close a modal
         const closeModal = (modalId) => {
             const modal = document.getElementById(modalId);
             if (modal) {
@@ -5495,7 +5359,11 @@ if (batchWatermarkSize) {
             }
         };
 
-        // Add event listeners to all modal trigger elements
+        window.switchModal = (closeId, openId) => {
+            closeModal(closeId);
+            openModal(openId);
+        };
+
         document.querySelectorAll('[data-modal-target]').forEach(trigger => {
             trigger.addEventListener('click', (event) => {
                 event.preventDefault();
@@ -5504,43 +5372,36 @@ if (batchWatermarkSize) {
             });
         });
 
-        // Add event listeners to all modal close buttons
         document.querySelectorAll('[data-modal-close]').forEach(button => {
             button.addEventListener('click', () => {
-                const modalId = button.getAttribute('data-modal-close');
-                closeModal(modalId);
-            });
-        });
-
-        // Add event listener to close modals when clicking on the overlay
-        document.querySelectorAll('.fixed.inset-0').forEach(modalOverlay => {
-            modalOverlay.addEventListener('click', (event) => {
-                // If the click is on the overlay itself (and not its children)
-                if (event.target === modalOverlay) {
-                    const modalId = modalOverlay.id;
-                    if (modalId) {
-                        closeModal(modalId);
-                    }
+                const parentModal = button.closest('.modal-container');
+                if (parentModal) {
+                    closeModal(parentModal.id);
                 }
             });
         });
 
-        // Close modals with the Escape key
+        document.querySelectorAll('.modal-container').forEach(modalOverlay => {
+            modalOverlay.addEventListener('click', (event) => {
+                if (event.target === modalOverlay) {
+                    closeModal(modalOverlay.id);
+                }
+            });
+        });
+
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape') {
-                document.querySelectorAll('.fixed.inset-0:not(.hidden)').forEach(modal => {
+                document.querySelectorAll('.modal-container:not(.hidden)').forEach(modal => {
                      closeModal(modal.id);
                 });
             }
         });
     });
     </script>
-    <!-- END: NEW SCRIPT FOR FOOTER MODALS -->
     
   <script>
 document.addEventListener('DOMContentLoaded', function () {
 
-    // All Tools: open centered modal on desktop, dropdown fallback if needed
     const allToolsBtn = document.getElementById('all-tools-btn');
     const allToolsDropdown = document.getElementById('all-tools-dropdown');
     const allToolsModal = document.getElementById('all-tools-modal');
@@ -5551,10 +5412,8 @@ document.addEventListener('DOMContentLoaded', function () {
             if(event) event.stopPropagation();
             const isDesktop = window.matchMedia('(min-width: 768px)').matches;
             if (isDesktop && allToolsModal && allToolsModalContent && allToolsDropdown) {
-                // Inject inner content from dropdown into modal to keep one source of truth
                 const inner = allToolsDropdown.querySelector('div.p-2');
                 if (inner) allToolsModalContent.innerHTML = inner.outerHTML;
-                // Always hide the dropdown when opening modal (avoid double panels)
                 allToolsDropdown.classList.add('hidden');
                 allToolsDropdown.style.display = 'none';
                 allToolsModal.classList.remove('hidden');
@@ -5562,7 +5421,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 allToolsDropdown.classList.toggle('hidden');
             }
         };
-        // Close modal interactions
         const closeModal = () => {
             if (!allToolsModal) return;
             allToolsModal.classList.add('hidden');
@@ -5576,7 +5434,6 @@ document.addEventListener('DOMContentLoaded', function () {
         
         allToolsBtn.addEventListener('click', (e) => window.openAllTools(e));
         
-        // Close dropdown when clicking outside (for small screens)
         document.addEventListener('click', function (event) {
             if (allToolsDropdown && !allToolsDropdown.classList.contains('hidden')) {
                 if (!allToolsBtn.contains(event.target) && !allToolsDropdown.contains(event.target)) {
@@ -5586,11 +5443,9 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Mobile Menu Logic
     const menuToggle = document.getElementById('mobile-menu-toggle');
     const mobileMenuContent = document.getElementById('mobile-menu-content');
     if (menuToggle && mobileMenuContent) {
-        // Build the mobile menu content
         mobileMenuContent.innerHTML = `
             <div class="flex flex-col gap-3">
                 <div class="grid grid-cols-3 gap-2">
@@ -5622,7 +5477,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         <a href="#" class="flex items-center gap-3 px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-md"><i class="ph ph-chart-bar text-lg"></i><span>Histogram</span></a>
                         <a href="#" class="flex items-center gap-3 px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-md"><i class="ph ph-sparkle text-lg"></i><span>Sharpen / Smart Focus</span></a>
                     </div>
-                     <!-- Others Tools Column -->
                     <div class="border-t border-gray-700 pt-3">
                         <div class="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">Others Tools</div>
                         <a href="https://onlinemynotepad.blogspot.com/" class="flex items-center gap-3 px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-md"><i class="ph-bold ph-file-text"></i><span>Online Notepad</span></a>
@@ -5632,13 +5486,11 @@ document.addEventListener('DOMContentLoaded', function () {
         </div>
         `;
 
-        // Toggle open/close
         menuToggle.addEventListener('click', function() {
             mobileMenuContent.classList.toggle('hidden');
             mobileMenuContent.classList.toggle('flex');
         });
 
-        // Close when clicking outside
         document.addEventListener('click', function (event) {
             const withinToggle = menuToggle.contains(event.target);
             const withinMenu = mobileMenuContent.contains(event.target);
@@ -5648,7 +5500,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
 
-        // Wire up mobile quick actions
         const loginModal = document.getElementById('loginModal');
         mobileMenuContent.addEventListener('click', (e) => {
             if (e.target.closest('#mobile-login')) {
@@ -5672,13 +5523,4 @@ document.addEventListener('DOMContentLoaded', function () {
 <script async="async" data-cfasync="false" src="//pl26941346.profitableratecpm.com/7128caf782579cf1a6e998e1d0a0fe7b/invoke.js"></script>
    
 </body>
-</html>    
-
-
-
-
-
-
-
-
-
+</html>
