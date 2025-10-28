@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
@@ -425,7 +425,7 @@
         <!-- Icon Buttons -->
         <div class="hidden md:flex items-center gap-4">
             
-            <button class="text-gray-400 hover:text-white transition-colors"><i class="ph ph-gear text-xl"></i></button>
+            <button id="manageApiKeysBtn" class="text-gray-400 hover:text-white transition-colors"><i class="ph ph-gear text-xl"></i></button>
             <div id="auth-section" class="relative">
                 <button id="login-button" class="text-gray-400 hover:text-white transition-colors"><i class="ph ph-user-circle text-2xl"></i></button>
                 <img id="user-avatar" src="" alt="User Avatar" class="hidden w-8 h-8 rounded-full bg-gray-700 border-2 border-gray-600 cursor-pointer">
@@ -2041,82 +2041,58 @@
     </div>
 
     <!-- END: NEW FOOTER MODALS -->
-    <!-- START: NEW SCRIPT FOR FOOTER MODALS -->
+    <!-- START: NEW SCRIPT FOR FOOTER MODALS -->   
+
+
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-    // Function to open a modal
-    const openModal = (modalId) => {
-        const modal = document.getElementById(modalId);
-        if (modal) {
-            modal.classList.remove('hidden');
-        }
-    };
-
-    // Function to close a modal
-    const closeModal = (modalId) => {
-        const modal = document.getElementById(modalId);
-        if (modal) {
-            modal.classList.add('hidden');
-        }
-    };
-
-    // ****** নতুন ফাংশনটি এখানে যুক্ত করুন ******
-    // Function to switch modals
-    window.switchModal = (closeId, openId) => {
-        closeModal(closeId);
-        openModal(openId);
-    };
-
-    // Add event listeners to all modal trigger elements
-    document.querySelectorAll('[data-modal-target]').forEach(trigger => {
-        trigger.addEventListener('click', (event) => {
-            event.preventDefault();
-            const modalId = trigger.getAttribute('data-modal-target');
-            openModal(modalId);
-        });
-    });
-
-    // Add event listeners to all modal close buttons
-    document.querySelectorAll('[data-modal-close]').forEach(button => {
-        button.addEventListener('click', () => {
-            const modalId = button.getAttribute('data-modal-close');
-            // Find the parent modal and close it
-            const parentModal = button.closest('.modal-container');
-            if (parentModal) {
-                closeModal(parentModal.id);
-            }
-        });
-    });
-
-    // Add event listener to close modals when clicking on the overlay
-    document.querySelectorAll('.modal-container').forEach(modalOverlay => {
-        modalOverlay.addEventListener('click', (event) => {
-            // If the click is on the overlay itself (and not its children)
-            if (event.target === modalOverlay) {
-                closeModal(modalOverlay.id);
-            }
-        });
-    });
-
-    // Close modals with the Escape key
-    document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape') {
-            document.querySelectorAll('.modal-container:not(.hidden)').forEach(modal => {
-                 closeModal(modal.id);
-            });
-        }
-    });
-});
-</script>
-<!-- END: NEW SCRIPT FOR FOOTER MODALS -->
-   <!-- Ad script container -->
-    <div id="container-7128caf782579cf1a6e998e1d0a0fe7b"></div>
-
-    <!-- Main Application Logic -->
-           <script>
     document.addEventListener('DOMContentLoaded', () => {
       
       
+      
+       // ফর্ম + JSONP পদ্ধতিতে POST অনুরোধ পাঠানোর জন্য Helper ফাংশন
+function postViaForm(payload) {
+    return new Promise((resolve, reject) => {
+        try {
+            const callbackName = 'jsonp_callback_' + Date.now() + Math.round(Math.random() * 100000);
+            const iframeName = 'post_iframe_' + callbackName;
+
+            const iframe = document.createElement('iframe');
+            iframe.name = iframeName;
+            iframe.style.display = 'none';
+            document.body.appendChild(iframe);
+
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = GOOGLE_APPS_SCRIPT_URL;
+            form.target = iframeName;
+            form.style.display = 'none';
+
+            const payloadInput = document.createElement('input');
+            payloadInput.name = 'payload';
+            payloadInput.value = JSON.stringify(payload);
+            form.appendChild(payloadInput);
+
+            const callbackInput = document.createElement('input');
+            callbackInput.name = 'callback';
+            callbackInput.value = callbackName;
+            form.appendChild(callbackInput);
+
+            document.body.appendChild(form);
+
+            // গ্লোবাল callback ফাংশন
+            window[callbackName] = function(response) {
+                // iframe, ফর্ম এবং callback ফাংশন পরিষ্কার করা
+                document.body.removeChild(iframe);
+                document.body.removeChild(form);
+                delete window[callbackName];
+
+                if (response.success) {
+                    resolve(response.data);
+                } else {
+                    reject(new Error(response.error));
+                }
+            };
+
             // একটি টাইমআউট সেট করা হচ্ছে, যদি কোনো উত্তর না আসে
             setTimeout(() => {
                 if (window[callbackName]) {
@@ -2551,7 +2527,56 @@ document.addEventListener('DOMContentLoaded', () => {
             if (enhanceModal) enhanceModal.classList.remove('hidden');
         };
        
-       
+         // এই একটি ফাংশনই এখন থেকে সব API কল পাঠাবে
+function callApiViaForm(payload) {
+    return new Promise((resolve, reject) => {
+        try {
+            console.log(`Calling Google Apps Script for "${payload.api}" via FORM POST...`);
+
+            // একটি ইউনিক callback ফাংশনের নাম তৈরি করা হচ্ছে
+            const callbackName = 'jsonp_callback_' + Date.now() + Math.round(Math.random() * 100000);
+            const iframeName = 'post_iframe_' + callbackName;
+
+            // একটি অদৃশ্য iframe তৈরি করা হচ্ছে, যাতে পেজ রিলোড না হয়
+            const iframe = document.createElement('iframe');
+            iframe.name = iframeName;
+            iframe.style.display = 'none';
+            document.body.appendChild(iframe);
+
+            // একটি অদৃশ্য ফর্ম তৈরি করা হচ্ছে
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = GOOGLE_APPS_SCRIPT_URL;
+            form.target = iframeName; // iframe-এ সাবমিট করা হবে
+            form.style.display = 'none';
+
+            // payload ইনপুট
+            const payloadInput = document.createElement('input');
+            payloadInput.name = 'payload';
+            payloadInput.value = JSON.stringify(payload);
+            form.appendChild(payloadInput);
+
+            // callback ইনপুট
+            const callbackInput = document.createElement('input');
+            callbackInput.name = 'callback';
+            callbackInput.value = callbackName;
+            form.appendChild(callbackInput);
+            
+            document.body.appendChild(form);
+
+            // গ্লোবাল স্কোপে callback ফাংশনটি তৈরি করা হচ্ছে
+            window[callbackName] = function(response) {
+                // টেস্ট শেষ হলে iframe এবং ফর্ম মুছে ফেলা হচ্ছে
+                document.body.removeChild(iframe);
+                document.body.removeChild(form);
+                delete window[callbackName];
+
+                if (response.success) {
+                    resolve(response.data);
+                } else {
+                    reject(new Error(response.error));
+                }
+            };
 
             // একটি টাইমআউট সেট করা হচ্ছে
             setTimeout(() => {
@@ -3064,8 +3089,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (recheckImageBtn) recheckImageBtn.disabled = false;
             }
         };
-
-        const handleAiUpscale = async (factor, buttonElement) => {
+  const handleAiUpscale = async (factor, buttonElement) => {
     if (!currentFileObject) {
         window.showToast('Please upload an image first.', 'error');
         return;
@@ -3082,22 +3106,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
         const originalBase64 = await toBase64(currentFileObject);
-        const { width: originalWidth, height: originalHeight } = currentImageDimensions;
 
-        // নিশ্চিত করুন যে width এবং height সঠিক সংখ্যা
-        if (!originalWidth || !originalHeight) {
-            throw new Error("Could not determine original image dimensions.");
-        }
-
+        // ClipDrop API-টি 2x এবং 4x আপস্কেলিং সমর্থন করে না, তাই আমরা শুধু একবার কল করব
+        // factor প্যারামিটারটি এখন শুধুমাত্র ফাইলের নামের জন্য ব্যবহৃত হবে
         const response = await fetch('/api/proxy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 api: "clipdrop-upscale",
                 base64Data: originalBase64,
-                factor: factor, // <-- ফ্যাক্টর পাঠানো হচ্ছে
-                originalWidth: originalWidth, // <-- মূল প্রস্থ পাঠানো হচ্ছে
-                originalHeight: originalHeight // <-- মূল উচ্চতা পাঠানো হচ্ছে
+                // factor এখানে আর পাঠানোর প্রয়োজন নেই
             })
         });
 
@@ -3109,11 +3127,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const result = await response.json();
         const imageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
         
-        const newFileName = `Upscaled-AI-${factor}x-${currentUploadedFileName || 'image.jpg'}`;
+        // ClipDrop API ডিফল্টভাবে 2x আপস্কেল করে, তাই আমরা ফাইলের নামে '2x' যোগ করব
+        const newFileName = `Upscaled-AI-2x-${currentUploadedFileName || 'image.jpg'}`;
         const newFile = new File([imageBlob], newFileName, { type: imageBlob.type });
         
         await updateImageStateAfterEdit(newFile, URL.createObjectURL(newFile));
-        window.showToast(`Image successfully upscaled by ${factor}x! Preview updated.`, 'success');
+        window.showToast(`Image successfully upscaled by 2x! Preview updated.`, 'success');
 
     } catch (error) {
         console.error('AI Upscale API Error:', error);
@@ -3126,7 +3145,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 };
- 
         const handleNormalUpscale = (factor, buttonElement) => {
             if (!window.isOpenCvReady || !originalImageSrcForEnhance) return;
             if(normalUpscaleDropdown) normalUpscaleDropdown.classList.add('hidden');
@@ -3238,10 +3256,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // ****** END: NEW HELPER FUNCTION FOR RESIZING ******
 
         // ****** START: UPDATED REIMAGINE FUNCTION ******
-     
-        // ****** END: UPDATED REIMAGINE FUNCTION ******
-
-        const handleReimagine = async () => {
+       const handleReimagine = async () => {
     if (!currentFileObject) { window.showToast('Please upload an image first.', 'error'); return; }
 
     reimagineBtn.disabled = true;
@@ -3252,22 +3267,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const imageBlobForApi = await resizeImageForApi(sourceImageUrl, 1024);
         const imageBase64 = await toBase64(imageBlobForApi);
 
-        // --- মূল সমাধান: Vercel প্রক্সিকে কল করা হচ্ছে ---
-        const response = await fetch('/api/proxy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                api: "clipdrop-reimagine", // <-- সঠিক API নাম
-                imageBase64: imageBase64
-            })
+        const result = await postViaForm({ // সরাসরি postViaForm ব্যবহার করা হচ্ছে
+            api: "clipdrop-reimagine",
+            imageBase64: imageBase64
         });
-
-        if (!response.ok) {
-            const errorResult = await response.json();
-            throw new Error(errorResult.error || `Server error: ${response.status}`);
-        }
         
-        const result = await response.json();
         const imageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
         const newFileName = `Reimagined-${currentUploadedFileName || 'image.jpg'}`;
         const newFile = new File([imageBlob], newFileName, { type: imageBlob.type });
@@ -3281,7 +3285,8 @@ document.addEventListener('DOMContentLoaded', () => {
         reimagineBtn.innerHTML = `<i class="ph-bold ph-sparkle"></i> Reimagine`;
     }
 };
-               
+        // ****** END: UPDATED REIMAGINE FUNCTION ******
+        
         function drawOnMask(e) {
             if (!isDrawing) return;
             maskCtx.lineJoin = 'round';
@@ -3330,7 +3335,7 @@ document.addEventListener('DOMContentLoaded', () => {
             removalImageObject.src = enhancedImageSrcForEnhance || originalImageSrcForEnhance;
         }
         
-     async function handleObjectRemoval() {
+      async function handleObjectRemoval() {
     const maskData = maskCtx.getImageData(0, 0, removalMaskCanvas.width, removalMaskCanvas.height);
     if (![...maskData.data].some(c => c !== 0)) { window.showToast('Please paint a mask over the object to remove.', 'info'); return; }
     
@@ -3340,8 +3345,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const imageBase64 = removalImageCanvas.toDataURL('image/jpeg').split(',')[1];
         const maskBase64 = removalMaskCanvas.toDataURL('image/png').split(',')[1];
 
-        // --- মূল সমাধান: Vercel প্রক্সিকে কল করা হচ্ছে ---
-        const response = await fetch('/api/proxy', {
+        const response = await fetch('/api/proxy', { // <-- URL পরিবর্তন করা হয়েছে
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -5261,10 +5265,12 @@ if (batchWatermarkSize) {
         initializeApiKeys();
         if (window.isOpenCvReady) { if (window.updateEnhanceButtonState) window.updateEnhanceButtonState(); }
     });
-    </script>
     
+     </script>
+
     <!-- Authentication Logic -->
     <script>
+
     document.addEventListener('DOMContentLoaded', () => {
         const SUPABASE_URL = 'https://fzvsnxzxkyizcrhsnwdz.supabase.co'; 
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ6dnNueHp4a3lpemNyaHNud2R6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI3MjQxNjYsImV4cCI6MjA2ODMwMDE2Nn0.O6h54XciETatW88FvVx00telEjRaoMqrsSejWWSAWVo';
@@ -5474,10 +5480,12 @@ if (batchWatermarkSize) {
 
         checkSession();
     });
-    </script>
-  
+    
+   </script>
+
    <!-- START: NEW SCRIPT FOR FOOTER MODALS -->
     <script>
+
     document.addEventListener('DOMContentLoaded', () => {
         // Function to open a modal
         const openModal = (modalId) => {
@@ -5534,10 +5542,11 @@ if (batchWatermarkSize) {
             }
         });
     });
-    </script>
-    <!-- END: NEW SCRIPT FOR FOOTER MODALS -->
     
-  <script>
+ </script>
+    <!-- END: NEW SCRIPT FOR FOOTER MODALS -->
+
+ <script>
 document.addEventListener('DOMContentLoaded', function () {
 
     // All Tools: open centered modal on desktop, dropdown fallback if needed
@@ -5673,8 +5682,3 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
-
-
-
-
-
