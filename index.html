@@ -3158,7 +3158,7 @@ function callApiViaForm(payload) {
                 if (recheckImageBtn) recheckImageBtn.disabled = false;
             }
         };
-        const handleAiUpscale = async (factor, buttonElement) => {
+  const handleAiUpscale = async (factor, buttonElement) => {
     if (!currentFileObject) {
         window.showToast('Please upload an image first.', 'error');
         return;
@@ -3174,15 +3174,17 @@ function callApiViaForm(payload) {
     if (upscaleSpinner) upscaleSpinner.classList.remove('hidden');
 
     try {
-        // মূল ছবিটি রিসাইজ না করে সরাসরি base64 তে রূপান্তর করা হচ্ছে
         const originalBase64 = await toBase64(currentFileObject);
 
-        const response = await fetch('/api/proxy', { // <-- URL পরিবর্তন করা হয়েছে
+        // ClipDrop API-টি 2x এবং 4x আপস্কেলিং সমর্থন করে না, তাই আমরা শুধু একবার কল করব
+        // factor প্যারামিটারটি এখন শুধুমাত্র ফাইলের নামের জন্য ব্যবহৃত হবে
+        const response = await fetch('/api/proxy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                api: "clipdrop-upscale", // <-- সঠিক API নাম
-                base64Data: originalBase64
+                api: "clipdrop-upscale",
+                base64Data: originalBase64,
+                // factor এখানে আর পাঠানোর প্রয়োজন নেই
             })
         });
 
@@ -3193,12 +3195,13 @@ function callApiViaForm(payload) {
 
         const result = await response.json();
         const imageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
-        const newFileName = `Upscaled-AI-${factor}x-${currentUploadedFileName || 'image.jpg'}`;
+        
+        // ClipDrop API ডিফল্টভাবে 2x আপস্কেল করে, তাই আমরা ফাইলের নামে '2x' যোগ করব
+        const newFileName = `Upscaled-AI-2x-${currentUploadedFileName || 'image.jpg'}`;
         const newFile = new File([imageBlob], newFileName, { type: imageBlob.type });
         
-        // বাকি UI আপডেট লজিক আগের মতোই থাকবে
         await updateImageStateAfterEdit(newFile, URL.createObjectURL(newFile));
-        window.showToast(`Image successfully upscaled by ${factor}x! Preview updated.`, 'success');
+        window.showToast(`Image successfully upscaled by 2x! Preview updated.`, 'success');
 
     } catch (error) {
         console.error('AI Upscale API Error:', error);
@@ -5743,6 +5746,7 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
+
 
 
 
