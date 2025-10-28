@@ -3158,7 +3158,8 @@ function callApiViaForm(payload) {
                 if (recheckImageBtn) recheckImageBtn.disabled = false;
             }
         };
-  const handleAiUpscale = async (factor, buttonElement) => {
+
+        const handleAiUpscale = async (factor, buttonElement) => {
     if (!currentFileObject) {
         window.showToast('Please upload an image first.', 'error');
         return;
@@ -3175,16 +3176,22 @@ function callApiViaForm(payload) {
 
     try {
         const originalBase64 = await toBase64(currentFileObject);
+        const { width: originalWidth, height: originalHeight } = currentImageDimensions;
 
-        // ClipDrop API-টি 2x এবং 4x আপস্কেলিং সমর্থন করে না, তাই আমরা শুধু একবার কল করব
-        // factor প্যারামিটারটি এখন শুধুমাত্র ফাইলের নামের জন্য ব্যবহৃত হবে
+        // নিশ্চিত করুন যে width এবং height সঠিক সংখ্যা
+        if (!originalWidth || !originalHeight) {
+            throw new Error("Could not determine original image dimensions.");
+        }
+
         const response = await fetch('/api/proxy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 api: "clipdrop-upscale",
                 base64Data: originalBase64,
-                // factor এখানে আর পাঠানোর প্রয়োজন নেই
+                factor: factor, // <-- ফ্যাক্টর পাঠানো হচ্ছে
+                originalWidth: originalWidth, // <-- মূল প্রস্থ পাঠানো হচ্ছে
+                originalHeight: originalHeight // <-- মূল উচ্চতা পাঠানো হচ্ছে
             })
         });
 
@@ -3196,12 +3203,11 @@ function callApiViaForm(payload) {
         const result = await response.json();
         const imageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
         
-        // ClipDrop API ডিফল্টভাবে 2x আপস্কেল করে, তাই আমরা ফাইলের নামে '2x' যোগ করব
-        const newFileName = `Upscaled-AI-2x-${currentUploadedFileName || 'image.jpg'}`;
+        const newFileName = `Upscaled-AI-${factor}x-${currentUploadedFileName || 'image.jpg'}`;
         const newFile = new File([imageBlob], newFileName, { type: imageBlob.type });
         
         await updateImageStateAfterEdit(newFile, URL.createObjectURL(newFile));
-        window.showToast(`Image successfully upscaled by 2x! Preview updated.`, 'success');
+        window.showToast(`Image successfully upscaled by ${factor}x! Preview updated.`, 'success');
 
     } catch (error) {
         console.error('AI Upscale API Error:', error);
@@ -3214,6 +3220,7 @@ function callApiViaForm(payload) {
         }
     }
 };
+ 
         const handleNormalUpscale = (factor, buttonElement) => {
             if (!window.isOpenCvReady || !originalImageSrcForEnhance) return;
             if(normalUpscaleDropdown) normalUpscaleDropdown.classList.add('hidden');
@@ -5746,6 +5753,7 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
+
 
 
 
