@@ -5047,13 +5047,18 @@ if (batchWatermarkSize) {
             });
         }
 
-        if (startBatchProcessBtn) startBatchProcessBtn.addEventListener('click', handleBatchProcess);
+       if (startBatchProcessBtn) startBatchProcessBtn.addEventListener('click', handleBatchProcess);
         if (downloadBatchZipBtn) downloadBatchZipBtn.addEventListener('click', downloadBatchZip);
         
         batchSliders.forEach(slider => {
+            // শুধুমাত্র নম্বরটি সাথে সাথে আপডেট করার জন্য 'input' ইভেন্ট ব্যবহার করুন
             slider.addEventListener('input', e => {
                 const valEl = document.getElementById(`batchSliderVal-${e.target.id.split('-')[2]}`);
                 if (valEl) valEl.textContent = e.target.value;
+            });
+
+            // শুধুমাত্র স্লাইডার ড্র্যাগ করা শেষ হলে ছবিটি প্রসেস করার জন্য 'change' ইভেন্ট ব্যবহার করুন
+            slider.addEventListener('change', e => {
                 if (currentBatchPreviewIndex !== null) {
                     showBatchPreview(currentBatchPreviewIndex);
                 }
@@ -5658,6 +5663,7 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
+
 
 
 
