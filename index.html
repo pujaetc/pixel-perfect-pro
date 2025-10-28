@@ -2117,51 +2117,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('DOMContentLoaded', () => {
       
       
-      
-       // ফর্ম + JSONP পদ্ধতিতে POST অনুরোধ পাঠানোর জন্য Helper ফাংশন
-function postViaForm(payload) {
-    return new Promise((resolve, reject) => {
-        try {
-            const callbackName = 'jsonp_callback_' + Date.now() + Math.round(Math.random() * 100000);
-            const iframeName = 'post_iframe_' + callbackName;
-
-            const iframe = document.createElement('iframe');
-            iframe.name = iframeName;
-            iframe.style.display = 'none';
-            document.body.appendChild(iframe);
-
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = GOOGLE_APPS_SCRIPT_URL;
-            form.target = iframeName;
-            form.style.display = 'none';
-
-            const payloadInput = document.createElement('input');
-            payloadInput.name = 'payload';
-            payloadInput.value = JSON.stringify(payload);
-            form.appendChild(payloadInput);
-
-            const callbackInput = document.createElement('input');
-            callbackInput.name = 'callback';
-            callbackInput.value = callbackName;
-            form.appendChild(callbackInput);
-
-            document.body.appendChild(form);
-
-            // গ্লোবাল callback ফাংশন
-            window[callbackName] = function(response) {
-                // iframe, ফর্ম এবং callback ফাংশন পরিষ্কার করা
-                document.body.removeChild(iframe);
-                document.body.removeChild(form);
-                delete window[callbackName];
-
-                if (response.success) {
-                    resolve(response.data);
-                } else {
-                    reject(new Error(response.error));
-                }
-            };
-
             // একটি টাইমআউট সেট করা হচ্ছে, যদি কোনো উত্তর না আসে
             setTimeout(() => {
                 if (window[callbackName]) {
@@ -2596,56 +2551,7 @@ function postViaForm(payload) {
             if (enhanceModal) enhanceModal.classList.remove('hidden');
         };
        
-         // এই একটি ফাংশনই এখন থেকে সব API কল পাঠাবে
-function callApiViaForm(payload) {
-    return new Promise((resolve, reject) => {
-        try {
-            console.log(`Calling Google Apps Script for "${payload.api}" via FORM POST...`);
-
-            // একটি ইউনিক callback ফাংশনের নাম তৈরি করা হচ্ছে
-            const callbackName = 'jsonp_callback_' + Date.now() + Math.round(Math.random() * 100000);
-            const iframeName = 'post_iframe_' + callbackName;
-
-            // একটি অদৃশ্য iframe তৈরি করা হচ্ছে, যাতে পেজ রিলোড না হয়
-            const iframe = document.createElement('iframe');
-            iframe.name = iframeName;
-            iframe.style.display = 'none';
-            document.body.appendChild(iframe);
-
-            // একটি অদৃশ্য ফর্ম তৈরি করা হচ্ছে
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = GOOGLE_APPS_SCRIPT_URL;
-            form.target = iframeName; // iframe-এ সাবমিট করা হবে
-            form.style.display = 'none';
-
-            // payload ইনপুট
-            const payloadInput = document.createElement('input');
-            payloadInput.name = 'payload';
-            payloadInput.value = JSON.stringify(payload);
-            form.appendChild(payloadInput);
-
-            // callback ইনপুট
-            const callbackInput = document.createElement('input');
-            callbackInput.name = 'callback';
-            callbackInput.value = callbackName;
-            form.appendChild(callbackInput);
-            
-            document.body.appendChild(form);
-
-            // গ্লোবাল স্কোপে callback ফাংশনটি তৈরি করা হচ্ছে
-            window[callbackName] = function(response) {
-                // টেস্ট শেষ হলে iframe এবং ফর্ম মুছে ফেলা হচ্ছে
-                document.body.removeChild(iframe);
-                document.body.removeChild(form);
-                delete window[callbackName];
-
-                if (response.success) {
-                    resolve(response.data);
-                } else {
-                    reject(new Error(response.error));
-                }
-            };
+       
 
             // একটি টাইমআউট সেট করা হচ্ছে
             setTimeout(() => {
@@ -3332,7 +3238,10 @@ function callApiViaForm(payload) {
         // ****** END: NEW HELPER FUNCTION FOR RESIZING ******
 
         // ****** START: UPDATED REIMAGINE FUNCTION ******
-       const handleReimagine = async () => {
+     
+        // ****** END: UPDATED REIMAGINE FUNCTION ******
+
+        const handleReimagine = async () => {
     if (!currentFileObject) { window.showToast('Please upload an image first.', 'error'); return; }
 
     reimagineBtn.disabled = true;
@@ -3343,11 +3252,22 @@ function callApiViaForm(payload) {
         const imageBlobForApi = await resizeImageForApi(sourceImageUrl, 1024);
         const imageBase64 = await toBase64(imageBlobForApi);
 
-        const result = await postViaForm({ // সরাসরি postViaForm ব্যবহার করা হচ্ছে
-            api: "clipdrop-reimagine",
-            imageBase64: imageBase64
+        // --- মূল সমাধান: Vercel প্রক্সিকে কল করা হচ্ছে ---
+        const response = await fetch('/api/proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                api: "clipdrop-reimagine", // <-- সঠিক API নাম
+                imageBase64: imageBase64
+            })
         });
+
+        if (!response.ok) {
+            const errorResult = await response.json();
+            throw new Error(errorResult.error || `Server error: ${response.status}`);
+        }
         
+        const result = await response.json();
         const imageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
         const newFileName = `Reimagined-${currentUploadedFileName || 'image.jpg'}`;
         const newFile = new File([imageBlob], newFileName, { type: imageBlob.type });
@@ -3361,8 +3281,7 @@ function callApiViaForm(payload) {
         reimagineBtn.innerHTML = `<i class="ph-bold ph-sparkle"></i> Reimagine`;
     }
 };
-        // ****** END: UPDATED REIMAGINE FUNCTION ******
-        
+               
         function drawOnMask(e) {
             if (!isDrawing) return;
             maskCtx.lineJoin = 'round';
@@ -3411,7 +3330,7 @@ function callApiViaForm(payload) {
             removalImageObject.src = enhancedImageSrcForEnhance || originalImageSrcForEnhance;
         }
         
-      async function handleObjectRemoval() {
+     async function handleObjectRemoval() {
     const maskData = maskCtx.getImageData(0, 0, removalMaskCanvas.width, removalMaskCanvas.height);
     if (![...maskData.data].some(c => c !== 0)) { window.showToast('Please paint a mask over the object to remove.', 'info'); return; }
     
@@ -3421,7 +3340,8 @@ function callApiViaForm(payload) {
         const imageBase64 = removalImageCanvas.toDataURL('image/jpeg').split(',')[1];
         const maskBase64 = removalMaskCanvas.toDataURL('image/png').split(',')[1];
 
-        const response = await fetch('/api/proxy', { // <-- URL পরিবর্তন করা হয়েছে
+        // --- মূল সমাধান: Vercel প্রক্সিকে কল করা হচ্ছে ---
+        const response = await fetch('/api/proxy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -5753,6 +5673,7 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
+
 
 
 
