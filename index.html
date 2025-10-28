@@ -3100,23 +3100,23 @@ function callApiViaForm(payload) {
             }
         };
 
-        const handleAiUpscale = async (factor, buttonElement) => {
-    // ছবির সাইজ পরীক্ষা করার জন্য সর্বোচ্চ পিক্সেল সংখ্যা (১৬ মেগাপিক্সেল)
-    const CLIPDROP_MAX_PIXELS = 16 * 1000 * 1000;
+     const handleAiUpscale = async (factor, buttonElement) => {
+    const CLIPDROP_MAX_RESOLUTION = 4096; // <-- নতুন: সর্বোচ্চ রেজোলিউশন লিমিট
 
     if (!currentFileObject) {
         window.showToast('Please upload an image first.', 'error');
         return;
     }
-
-    // ছবির বর্তমান পিক্সেল সংখ্যা গণনা
-    const currentPixels = currentImageDimensions.width * currentImageDimensions.height;
     
-    // যদি ছবির সাইজ খুব বড় হয়, তাহলে সতর্কবার্তা দেখিয়ে ফাংশন বন্ধ করুন
-    if (currentPixels > CLIPDROP_MAX_PIXELS) {
-        window.showToast(`Image is too large (${(currentPixels / 1000000).toFixed(1)}MP). AI Upscale supports images up to 16MP.`, 'error');
+    // <-- নতুন: আপস্কেলের পর ছবির সাইজ কী হবে তা গণনা করা হচ্ছে
+    const targetWidth = currentImageDimensions.width * factor;
+    const targetHeight = currentImageDimensions.height * factor;
+
+    // <-- নতুন: গণনা করা সাইজ লিমিটের চেয়ে বড় কি না তা পরীক্ষা করা হচ্ছে
+    if (targetWidth > CLIPDROP_MAX_RESOLUTION || targetHeight > CLIPDROP_MAX_RESOLUTION) {
+        window.showToast(`Error: ${factor}x upscale would result in ${targetWidth}x${targetHeight}px, which exceeds the 4096px limit.`, 'error');
         if (aiUpscaleDropdown) aiUpscaleDropdown.classList.add('hidden');
-        return;
+        return; // লিমিট পার হলে ফাংশনটি এখানেই শেষ হবে
     }
 
     if (aiUpscaleDropdown) aiUpscaleDropdown.classList.add('hidden');
@@ -3741,7 +3741,7 @@ function callApiViaForm(payload) {
         'normal_2x': { condition: !isOpenCvReady, message: 'OpenCV is not ready for Normal Upscale.' },
         'normal_4x': { condition: !isOpenCvReady, message: 'OpenCV is not ready for Normal Upscale.' },
         'ai_2x': { condition: !clipDropApiKey, message: 'ClipDrop API key is required for AI Upscale.' },
-        'ai_4x': { condition: !clipDropApiKey, message: 'ClipDrop API key is required for AI Upscale.' } // <-- এই লাইনটি যোগ করা হয়েছে
+        'ai_4x': { condition: !clipDropApiKey, message: 'ClipDrop API key is required for AI Upscale.' } 
     };
     if (checks[settings.upscale] && checks[settings.upscale].condition) {
         showToast(checks[settings.upscale].message, 'error');
@@ -5792,6 +5792,7 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
+
 
 
 
