@@ -2118,6 +2118,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Global State ---
         let imageBase64 = '';
         let currentFileObject = null;
+        let apiKey = '';
+        let clipDropApiKey = '';
         let analysisResults = null;
         let currentMetadata = null;
         let enhancementSuggestionsData = null; 
@@ -5202,17 +5204,18 @@ if (batchWatermarkSize) {
         
        
       
-        // Initialize API keys
+       // Initialize API keys
         const initializeApiKeys = () => {
-            const geminiApiKey = localStorage.getItem('geminiApiKey');
-            const clipDropApiKey = localStorage.getItem('clipDropApiKey');
+            // Load keys from localStorage into the global variables
+            apiKey = localStorage.getItem('geminiApiKey') || '';
+            clipDropApiKey = localStorage.getItem('clipDropApiKey') || '';
             
             // Set input values if they exist
             const geminiApiKeyInput = document.getElementById('geminiApiKeyInput');
             const clipdropApiKeyInput = document.getElementById('clipdropApiKeyInput');
             
-            if (geminiApiKeyInput) geminiApiKeyInput.value = geminiApiKey || '';
-            if (clipdropApiKeyInput) clipdropApiKeyInput.value = clipDropApiKey || '';
+            if (geminiApiKeyInput) geminiApiKeyInput.value = apiKey;
+            if (clipdropApiKeyInput) clipdropApiKeyInput.value = clipDropApiKey;
 
             // Add API key input event listeners
             if (geminiApiKeyInput) {
@@ -5663,6 +5666,7 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
+
 
 
 
