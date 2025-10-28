@@ -2113,18 +2113,9 @@ document.addEventListener('DOMContentLoaded', () => {
     <div id="container-7128caf782579cf1a6e998e1d0a0fe7b"></div>
 
     <!-- Main Application Logic -->
-           <script>
+      <script>
     document.addEventListener('DOMContentLoaded', () => {
-      
-      
-            // Duplicate fragment removed: the original block here contained a partial
-            // iframe/form timeout + submit logic that was accidentally duplicated
-            // earlier in the file and caused JS parse errors. The full, correct
-            // implementation exists later in the file, so this truncated copy was
-            // deleted to restore syntactically valid JavaScript.
-
         // --- Global State ---
-        
         let imageBase64 = '';
         let currentFileObject = null;
         let analysisResults = null;
@@ -2140,10 +2131,9 @@ document.addEventListener('DOMContentLoaded', () => {
         let batchQueue = [];
         let batchResults = [];
         let batchMetadataResults = [];
-        let currentBatchPreviewIndex = null; // NEW: For batch preview
+        let currentBatchPreviewIndex = null;
         let fileToDownloadFromRecents = null;
-        // For Super Resolution or other custom sources
-        window.downloadContext = null; // { src: objectUrl, nameBase: string }
+        window.downloadContext = null;
 
         // --- Cache API ---
         const CACHE_NAME = 'pixelperfect-recent-images-v1';
@@ -2157,7 +2147,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const promptBtn = document.getElementById('promptBtn');
         const superResolutionBtn = document.getElementById('superResolutionBtn');
         const localVariationsBtn = document.getElementById('localVariationsBtn');
-       
         const uploadBox = document.getElementById('uploadBox');
         const imageUpload = document.getElementById('imageUpload');
         const browseBtn = document.getElementById('browseBtn');
@@ -2248,6 +2237,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const batchProgress = document.getElementById('batchProgress');
         const startBatchProcessBtn = document.getElementById('startBatchProcessBtn');
         const downloadBatchZipBtn = document.getElementById('downloadBatchZipBtn');
+        const downloadMetadataCsvBtn = document.getElementById('downloadMetadataCsvBtn');
         const batchSliders = document.querySelectorAll('#batchModal input[type="range"]:not(#batch-image-compare-slider)');
         const batchAddMoreBtn = document.getElementById('batchAddMoreBtn'); 
         const batchPreviewContainer = document.getElementById('batchPreviewContainer'); 
@@ -2259,7 +2249,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const batchImageCompareSlider = document.getElementById('batch-image-compare-slider');
         const srUploadPreviewContainer = document.getElementById('srUploadPreviewContainer');
         const srRemoveImageBtn = document.getElementById('srRemoveImageBtn');
-        // Watermark Elements
         const batchAddWatermark = document.getElementById('batchAddWatermark');
         const batchWatermarkOptions = document.getElementById('batchWatermarkOptions');
         const batchWatermarkTypeRadios = document.querySelectorAll('input[name="batchWatermarkType"]');
@@ -2274,7 +2263,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const batchWatermarkOpacity = document.getElementById('batchWatermarkOpacity');
         const batchWatermarkOpacityValue = document.getElementById('batchWatermarkOpacityValue');
         const batchWatermarkPosition = document.getElementById('batchWatermarkPosition');
-        // Local Variations selectors
+        const batchGenerateMetadata = document.getElementById('batchGenerateMetadata');
         const localVariationsModal = document.getElementById('localVariationsModal');
         const closeLocalVariationsModalBtn = document.getElementById('closeLocalVariationsModalBtn');
         const lvCountInput = document.getElementById('lvCount');
@@ -2287,7 +2276,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const lvGrid = document.getElementById('lvGrid');
         const lvEmpty = document.getElementById('lvEmpty');
         let lvResults = [];
-
 
         if (progressCircle) {
             const circleRadius = progressCircle.r.baseVal.value;
@@ -2307,65 +2295,30 @@ document.addEventListener('DOMContentLoaded', () => {
         window.updateEnhanceButtonState = () => {
             const isImageLoaded = !!imageBase64;
             const isCvReady = window.isOpenCvReady;
+            const isBackendReady = isImageLoaded; 
 
-            // API কী-এর উপর নির্ভরতা সরানো হয়েছে
-            const isBackendReady = isImageLoaded; // ব্যাকএন্ড ব্যবহারের জন্য শুধু ইমেজ লোড হওয়াই যথেষ্ট
-
-            // বাটনগুলোর অবস্থা নতুন লজিক অনুযায়ী আপডেট করা হচ্ছে
-            if (enhanceBtn) enhanceBtn.disabled = !(isBackendReady && isCvReady); // Enhance-এর জন্য OpenCV এবং ইমেজ দুটোই লাগবে
+            if (enhanceBtn) enhanceBtn.disabled = !(isBackendReady && isCvReady);
             if (metadataBtn) metadataBtn.disabled = !isBackendReady;
             if (promptBtn) promptBtn.disabled = !isBackendReady;
-            if (superResolutionBtn) superResolutionBtn.disabled = !isImageLoaded; // এটি আগের মতোই ঠিক আছে
-            if (localVariationsBtn) localVariationsBtn.disabled = !(isImageLoaded && isCvReady); // এটিও ঠিক আছে
-
-            // Enhance মডালের বাটনগুলো
+            if (superResolutionBtn) superResolutionBtn.disabled = !isImageLoaded;
+            if (localVariationsBtn) localVariationsBtn.disabled = !(isImageLoaded && isCvReady);
             if (cropBtn) cropBtn.disabled = !isImageLoaded;
             if (objectRemovalBtn) objectRemovalBtn.disabled = !isBackendReady;
             if (reimagineBtn) reimagineBtn.disabled = !isBackendReady;
             if (normalUpscaleToggleBtn) normalUpscaleToggleBtn.disabled = !(isImageLoaded && isCvReady);
-            if (aiUpscaleToggleBtn) aiUpscaleToggleBtn.disabled = !isBackendReady; // AI Upscale এখন ব্যাকএন্ড নির্ভর
+            if (aiUpscaleToggleBtn) aiUpscaleToggleBtn.disabled = !isBackendReady;
 
-            // টাইটেল বা টুলটিপ আপডেট (অপশনাল কিন্তু ভালো অভ্যাস)
             if (objectRemovalBtn) objectRemovalBtn.title = isImageLoaded ? "Remove objects from the image" : "Image required";
             if (reimagineBtn) reimagineBtn.title = isImageLoaded ? "Create variations of the image" : "Image required";
             if (aiUpscaleToggleBtn) aiUpscaleToggleBtn.title = isImageLoaded ? "Upscale using AI" : "Image required";
         };
 
-
-       const updateUI = () => {
-            // এখন শুধু ইমেজ লোড হয়েছে কি না, তা পরীক্ষা করা হচ্ছে
+        const updateUI = () => {
             const isAnalysisReady = !!imageBase64; 
             if (analyzeBtn) analyzeBtn.disabled = !isAnalysisReady;
-            
-            // updateEnhanceButtonState ফাংশনটিকে কল করা হচ্ছে
             window.updateEnhanceButtonState();
         };
         
-        const loadApiKeysFromStorage = () => {
-            apiKey = localStorage.getItem('geminiApiKey') || '';
-            clipDropApiKey = localStorage.getItem('clipDropApiKey') || '';
-            deepAiApiKey = localStorage.getItem('deepAiApiKey') || '';
-            if (geminiApiKeyInput) geminiApiKeyInput.value = apiKey;
-            if (clipdropApiKeyInput) clipdropApiKeyInput.value = clipDropApiKey;
-            if (deepAiApiKeyInput) deepAiApiKeyInput.value = deepAiApiKey;
-            updateUI();
-        };
-
-        const saveApiKeys = () => {
-            apiKey = (geminiApiKeyInput?.value || '').trim();
-            clipDropApiKey = (clipdropApiKeyInput?.value || '').trim();
-            // Only read/store DeepAI key if the input exists in DOM
-            if (typeof deepAiApiKeyInput !== 'undefined' && deepAiApiKeyInput) {
-                deepAiApiKey = (deepAiApiKeyInput.value || '').trim();
-                localStorage.setItem('deepAiApiKey', deepAiApiKey);
-            }
-            localStorage.setItem('geminiApiKey', apiKey);
-            localStorage.setItem('clipDropApiKey', clipDropApiKey);
-            if(window.showToast) window.showToast('API Keys saved successfully!', 'success');
-            if (apiKeyModal) apiKeyModal.classList.add('hidden');
-            updateUI();
-        };
-
         const setProgress = (percent) => {
             if (!progressCircle || !scoreText) return;
             const circleRadius = progressCircle.r.baseVal.value;
@@ -2519,6 +2472,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (initialState) initialState.classList.add('hidden');
             if (loadingState) loadingState.classList.add('hidden');
         };
+
         const displayEnhanceResults = (data) => {
             enhancementSuggestionsData = data.suggestions; 
             if (!enhanceSuggestions) return;
@@ -2539,63 +2493,57 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (enhanceModal) enhanceModal.classList.remove('hidden');
         };
-        
-       
-        // NOTE: Removed a duplicated/truncated iframe/form timeout + submit block
-        // which caused JavaScript parse errors. The proper implementation for
-        // that flow exists elsewhere in the file; this copy was an accidental
-        // paste and has been removed to restore valid syntax.
 
-// ==========================================================
-// ||       UPDATED callGeminiAPI FUNCTION                 ||
-// ==========================================================
-// এই ফাংশনটি এখন শুধুমাত্র একটি Wrapper হিসেবে কাজ করবে
+        const callGeminiAPI = async (prompt, imageBase64Data_unused, expectJson = true) => {
+            const apiKey = localStorage.getItem('geminiApiKey');
+            if (!apiKey) {
+                throw new Error("Gemini API key is missing. Please set it in the settings.");
+            }
+            
+            console.log("Resizing image before sending to Gemini API...");
+            if (!originalImageSrcForEnhance) throw new Error("Original image source is missing.");
 
- const callGeminiAPI = async (prompt, imageBase64Data_unused, expectJson = true) => {
-    console.log("Resizing image before sending to Gemini API...");
-    if (!originalImageSrcForEnhance) throw new Error("Original image source is missing.");
+            const imageBlobForApi = await resizeImageForApi(originalImageSrcForEnhance, 1024);
+            const imageBase64Data = await toBase64(imageBlobForApi);
+            const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent?key=${apiKey}`;
+            
+            const payload = {
+                contents: [{
+                    parts: [
+                        { text: prompt },
+                        { inline_data: { mime_type: "image/jpeg", data: imageBase64Data } }
+                    ]
+                }]
+            };
 
-    // ছবিটি রিসাইজ করা হচ্ছে
-    const imageBlobForApi = await resizeImageForApi(originalImageSrcForEnhance, 1024);
-    
-    // রিসাইজ করা ছবিকে base64-এ রূপান্তর করা হচ্ছে
-    const imageBase64Data = await toBase64(imageBlobForApi);
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
 
-    console.log("Calling Vercel proxy for Gemini...");
+            if (!response.ok) {
+                const errorResult = await response.json();
+                const errorMessage = errorResult?.error?.message || `Server error: ${response.status}`;
+                throw new Error(errorMessage);
+            }
 
-    // Vercel proxy-কে কল করা হচ্ছে
-    const response = await fetch('/api/proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            api: "gemini",
-            prompt: prompt,
-            base64Data: imageBase64Data,
-            expectJson: expectJson
-        })
-    });
+            const result = await response.json();
+            const textContent = result.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!textContent) throw new Error("Invalid API response structure from server.");
 
-    if (!response.ok) {
-        const errorResult = await response.json();
-        throw new Error(errorResult.error || `Server error: ${response.status}`);
-    }
-
-    const result = await response.json();
-    const textContent = result.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!textContent) throw new Error("Invalid API response structure from server.");
-
-    if (expectJson) {
-        try {
-            const jsonMatch = textContent.match(/```json\s*([\s\S]*?)\s*```|({[\s\S]*})/);
-            if (!jsonMatch) throw new Error("No JSON object found in API response.");
-            return JSON.parse(jsonMatch[1] || jsonMatch[2]);
-        } catch(e) {
-             throw new Error("AI response was not valid JSON. " + e.message);
-        }
-    } else {
-        return textContent;
-    }
-};
+            if (expectJson) {
+                try {
+                    const jsonMatch = textContent.match(/```json\s*([\s\S]*?)\s*```|({[\s\S]*})/);
+                    if (!jsonMatch) throw new Error("No JSON object found in API response.");
+                    return JSON.parse(jsonMatch[1] || jsonMatch[2]);
+                } catch(e) {
+                     throw new Error("AI response was not valid JSON. " + e.message);
+                }
+            } else {
+                return textContent;
+            }
+        };
       
         const handleAnalyze = async () => {
             if (!imageBase64) { if (window.showToast) window.showToast('An image is required for analysis.', 'error'); return; }
@@ -2606,14 +2554,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const promptText = `Analyze the provided image for a comprehensive, professional-level aesthetic and technical review. Output ONLY a valid JSON object. Do not include any explanatory text before or after the JSON. The JSON object should have the following structure: { "aestheticScore": <number from 0-100 for overall appeal>, "scoreBreakdown": { "lighting": <number 0-100>, "composition": <number 0-100>, "sharpness": <number 0-100>, "colorHarmony": <number 0-100>, "subjectFocus": <number 0-100> }, "tags": ["<up to 25 concise tags>"], "qualityInsights": { "compositionQuality": "<'Poor'|'Fair'|'Good'|'Excellent'>", "brightness": "<'Underexposed'|'Balanced'|'Overexposed'>", "contrast": "<'Low'|'Medium'|'High'>", "noiseLevel": "<'Low'|'Moderate'|'High'>", "subjectClarity": "<'Blurry'|'Soft'|'Sharp'>", "overallImpression": "<Briefly, e.g., 'Snapshot feel'>" }, "enhancementSuggestions": [ { "adjustment": "<e.g., 'Increase brightness by +10', 'Reduce saturation by -15', 'Sharpen image'>", "reason": "<why this will improve the image>" } ] } Ensure all numeric scores are integers. For adjustments, if a numeric value is implied, include it with its sign (e.g., +10, -15).`;
             try {
                 const parsedData = await callGeminiAPI(promptText, imageBase64);
-                
-                 if (currentFileObject) {
-                    logUserAction('analyze_image', { 
+                if (currentFileObject && window.logUserAction) {
+                    window.logUserAction('analyze_image', { 
                         filename: currentFileObject.name, 
                         filesize: currentFileObject.size 
                     });
                 }
-              
                 displayAnalysisResults(parsedData);
                 if (window.showToast) window.showToast('Analysis complete!', 'success');
             } catch (error) {
@@ -2624,6 +2570,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 else if (resultsContent) resultsContent.classList.remove('hidden');
             }
         };
+
         const formatBytes = (bytes, decimals = 2) => {
             if (!bytes || bytes === 0) return '0 Bytes';
             const k = 1024;
@@ -2631,7 +2578,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-        }
+        };
+
         const displayImageTechProperties = () => {
             const fileNameEl = document.getElementById('tech-prop-filename');
             const dimensionsEl = document.getElementById('tech-prop-dimensions');
@@ -2667,6 +2615,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setValues([filesizeEl, hFilesizeEl], [sizeVal, sizeVal]);
             setValues([filetypeEl, hFiletypeEl], [typeVal, typeVal]);
         };
+
         const handleEnhance = async () => {
             if (!imageBase64) { if (window.showToast) window.showToast('An image is required.', 'error'); return; }
             if (!window.isOpenCvReady) { if (window.showToast) window.showToast('Enhancement engine (OpenCV) is not ready. Please wait.', 'info'); return; }
@@ -2695,34 +2644,33 @@ document.addEventListener('DOMContentLoaded', () => {
                  if (enhanceSuggestions) enhanceSuggestions.innerHTML = `<p class="text-red-400">Failed to get suggestions. You can still use manual controls.</p>`;
             }
         };
-       // --- নতুন কোড (এটি পেস্ট করুন) ---
+
         const copyToClipboard = (text, type = 'Text') => {
-      // আধুনিক navigator.clipboard API ব্যবহার করা হচ্ছে
-       if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(text).then(() => {
-            if (window.showToast) window.showToast(`${type} copied to clipboard!`);
-        }).catch(err => {
-            if (window.showToast) window.showToast(`Failed to copy ${type}.`, 'error');
-            console.error('Async clipboard copy failed:', err);
-        });
-    } else {
-        // পুরোনো ব্রাউজারের জন্য ফলব্যাক পদ্ধতি
-        const tempTextArea = document.createElement('textarea');
-        tempTextArea.style.position = 'absolute';
-        tempTextArea.style.left = '-9999px';
-        tempTextArea.value = text;
-        document.body.appendChild(tempTextArea);
-        tempTextArea.select();
-        try {
-            document.execCommand('copy');
-            if (window.showToast) window.showToast(`${type} copied to clipboard!`);
-        } catch (err) {
-            if (window.showToast) window.showToast(`Failed to copy ${type}.`, 'error');
-            console.error('Fallback clipboard copy failed:', err);
+           if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(() => {
+                if (window.showToast) window.showToast(`${type} copied to clipboard!`);
+            }).catch(err => {
+                if (window.showToast) window.showToast(`Failed to copy ${type}.`, 'error');
+                console.error('Async clipboard copy failed:', err);
+            });
+        } else {
+            const tempTextArea = document.createElement('textarea');
+            tempTextArea.style.position = 'absolute';
+            tempTextArea.style.left = '-9999px';
+            tempTextArea.value = text;
+            document.body.appendChild(tempTextArea);
+            tempTextArea.select();
+            try {
+                document.execCommand('copy');
+                if (window.showToast) window.showToast(`${type} copied to clipboard!`);
+            } catch (err) {
+                if (window.showToast) window.showToast(`Failed to copy ${type}.`, 'error');
+                console.error('Fallback clipboard copy failed:', err);
+            }
+            document.body.removeChild(tempTextArea);
         }
-        document.body.removeChild(tempTextArea);
-    }
-};
+    };
+
         const updateEnhancedImage = (dataUrl) => {
             enhancedImageSrcForEnhance = dataUrl;
             if (afterImageSlider) afterImageSlider.src = dataUrl;
@@ -2731,6 +2679,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 imageCompareSlider.dispatchEvent(new Event('input'));
             }
         };
+    
                 const handleImageUrlInput = async () => {
             if (!imageUrlInput) return;
             const url = imageUrlInput.value.trim();
@@ -5644,6 +5593,7 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
+
 
 
 
