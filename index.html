@@ -2667,14 +2667,64 @@ function callApiViaForm(payload) {
     });
 }
 
+  // Helper function to resize an image before sending to the API
+const resizeImageForApi = (imgSrc, maxDim = 1024) => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'Anonymous'; // Important for canvas
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            let { width, height } = img;
+
+            if (width > height) {
+                if (width > maxDim) {
+                    height = Math.round(height * (maxDim / width));
+                    width = maxDim;
+                }
+            } else {
+                if (height > maxDim) {
+                    width = Math.round(width * (maxDim / height));
+                    height = maxDim;
+                }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            ctx.drawImage(img, 0, 0, width, height);
+
+            canvas.toBlob(blob => {
+                if (blob) {
+                    resolve(blob);
+                } else {
+                    reject(new Error('Canvas to Blob conversion failed'));
+                }
+            }, 'image/jpeg', 0.9); // Use JPEG for better compression
+        };
+        img.onerror = reject;
+        img.src = imgSrc;
+    });
+};      
+
 // ==========================================================
 // ||       UPDATED callGeminiAPI FUNCTION                 ||
 // ==========================================================
 // এই ফাংশনটি এখন শুধুমাত্র একটি Wrapper হিসেবে কাজ করবে
-const callGeminiAPI = async (prompt, imageBase64Data, expectJson = true) => {
-    // ...
-    // এখন আমরা fetch করব আমাদের নিজস্ব প্রক্সি এন্ডপয়েন্টে
-    const response = await fetch('/api/proxy', { // <-- URL পরিবর্তন করা হয়েছে
+
+ const callGeminiAPI = async (prompt, imageBase64Data_unused, expectJson = true) => {
+    console.log("Resizing image before sending to Gemini API...");
+    if (!originalImageSrcForEnhance) throw new Error("Original image source is missing.");
+
+    // ছবিটি রিসাইজ করা হচ্ছে
+    const imageBlobForApi = await resizeImageForApi(originalImageSrcForEnhance, 1024);
+    
+    // রিসাইজ করা ছবিকে base64-এ রূপান্তর করা হচ্ছে
+    const imageBase64Data = await toBase64(imageBlobForApi);
+
+    console.log("Calling Vercel proxy for Gemini...");
+
+    // Vercel proxy-কে কল করা হচ্ছে
+    const response = await fetch('/api/proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2684,28 +2734,28 @@ const callGeminiAPI = async (prompt, imageBase64Data, expectJson = true) => {
             expectJson: expectJson
         })
     });
-    
-    // নতুন Helper ফাংশনটিকে কল করা হচ্ছে
-    const result = await callApiViaForm(payload);
 
+    if (!response.ok) {
+        const errorResult = await response.json();
+        throw new Error(errorResult.error || `Server error: ${response.status}`);
+    }
+
+    const result = await response.json();
     const textContent = result.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!textContent) throw new Error("Invalid API response from server.");
+    if (!textContent) throw new Error("Invalid API response structure from server.");
 
     if (expectJson) {
         try {
             const jsonMatch = textContent.match(/```json\s*([\s\S]*?)\s*```|({[\s\S]*})/);
             if (!jsonMatch) throw new Error("No JSON object found in API response.");
-            const jsonString = jsonMatch[1] || jsonMatch[2];
-            return JSON.parse(jsonString);
-        } catch (e) {
-            throw new Error("AI response was not valid JSON. " + e.message);
+            return JSON.parse(jsonMatch[1] || jsonMatch[2]);
+        } catch(e) {
+             throw new Error("AI response was not valid JSON. " + e.message);
         }
     } else {
         return textContent;
     }
 };
-
-
       
         const handleAnalyze = async () => {
             if (!imageBase64) { if (window.showToast) window.showToast('An image is required for analysis.', 'error'); return; }
@@ -5760,3 +5810,4 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
+
