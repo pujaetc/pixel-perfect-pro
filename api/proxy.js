@@ -78,26 +78,41 @@ export default async function handler(request, response) {
         break;
       }
       
-      case "clipdrop-upscale": { // AI Upscale-এর জন্য
-        if (!clipdropApiKey) throw new Error("Server Error: ClipDrop API Key is not configured.");
-        
-        const formData = new FormData();
-        const imageBlob = new Blob([Buffer.from(payload.base64Data, 'base64')], { type: 'image/jpeg' });
-        formData.append('image_file', imageBlob, 'image.jpg');
-        // target_width এবং target_height পাঠানোর কোডটি মুছে ফেলা হয়েছে, কারণ এটি এখানে প্রয়োজন নেই
+      const { base64Data, factor, originalWidth, originalHeight } = payload;
+    
+    // ফ্রন্টএন্ড থেকে পাঠানো তথ্য দিয়ে target width/height গণনা করা হচ্ছে
+    const targetWidth = originalWidth * factor;
+    const targetHeight = originalHeight * factor;
 
-        const apiFetch = await fetch('https://clipdrop-api.co/image-upscaling/v1/upscale', {
-          method: 'POST',
-          headers: { 'x-api-key': clipdropApiKey },
-          body: formData,
-        });
+    // গণনা করা মানগুলো বৈধ সংখ্যা কি না, তা পরীক্ষা করা হচ্ছে
+    if (isNaN(targetWidth) || isNaN(targetHeight) || targetWidth === 0 || targetHeight === 0) {
+        throw new Error("Invalid target dimensions calculated on server.");
+    }
 
-        if (!apiFetch.ok) throw new Error(`ClipDrop Upscale API Error: ${await apiFetch.text()}`);
-        const resultBlob = await apiFetch.blob();
-        const buffer = Buffer.from(await resultBlob.arrayBuffer());
-        apiResponse = { imageBase64: buffer.toString('base64') };
-        break;
-      }
+    const formData = new FormData();
+    const imageBlob = new Blob([Buffer.from(base64Data, 'base64')], { type: 'image/jpeg' });
+    
+    formData.append('image_file', imageBlob, 'image.jpg');
+    formData.append('target_width', targetWidth);
+    formData.append('target_height', targetHeight);
+
+    const apiFetch = await fetch('https://clipdrop-api.co/image-upscaling/v1/upscale', {
+      method: 'POST',
+      headers: { 'x-api-key': clipdropApiKey },
+      body: formData,
+    });
+
+    if (!apiFetch.ok) {
+        // ClipDrop থেকে আসা এরর মেসেজটি সরাসরি ফ্রন্টএন্ডে পাঠানো হচ্ছে
+        const errorText = await apiFetch.text();
+        throw new Error(`ClipDrop Upscale API Error: ${errorText}`);
+    }
+
+    const resultBlob = await apiFetch.blob();
+    const buffer = Buffer.from(await resultBlob.arrayBuffer());
+    apiResponse = { imageBase64: buffer.toString('base64') };
+    break;
+  }
 
       default:
         throw new Error("Invalid API specified.");
