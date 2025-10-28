@@ -3736,7 +3736,8 @@ function callApiViaForm(payload) {
         const file = batchQueue[i];
         batchProgress.textContent = `Processing ${i + 1}/${batchQueue.length}: ${file.name}`;
         try {
-            // ১. মেটাডেটা জেনারেট (যদি সিলেক্ট করা থাকে)
+           
+           // ১. মেটাডেটা জেনারেট (যদি সিলেক্ট করা থাকে)
             if (settings.generateMetadata) {
                 try {
                     batchProgress.textContent = `Generating metadata for ${file.name}...`;
@@ -3746,17 +3747,17 @@ function callApiViaForm(payload) {
                     batchMetadataResults.push({
                         fileName: file.name,
                         title: meta.title || '',
-                        keywords: (meta.keywords || []).join(', '),
-                        description: meta.description || ''
+                        keywords: meta.keywords || [], // <-- পরিবর্তন: এখানে .join() সরানো হয়েছে
+                        description: meta.description || '' // <-- পরিবর্তন: এটি এখন সঠিকভাবে সেভ হবে
                     });
                 } catch (metaError) {
                     console.error(`Metadata generation failed for ${file.name}:`, metaError);
                     showToast(`Metadata failed for ${file.name}.`, 'error');
                     // একটি খালি এন্ট্রি যোগ করুন যাতে CSV-তে ফাইলের নাম থাকে
-                    batchMetadataResults.push({ fileName: file.name, title: 'ERROR', keywords: '', description: '' });
+                    batchMetadataResults.push({ fileName: file.name, title: 'ERROR', keywords: [], description: 'ERROR' });
                 }
             }
-
+         
             // ২. ছবি প্রসেস (Adjustments & Upscale)
             batchProgress.textContent = `Applying adjustments to ${file.name}...`;
             let processedBlob = await applyBatchAdjustmentsToBlob(file, settings);
@@ -3826,15 +3827,25 @@ function callApiViaForm(payload) {
              });
         }
 
-        async function applyBatchAIUpscale(blob, factor) {
+       async function applyBatchAIUpscale(blob, factor) {
     const base64Data = await toBase64(new File([blob], "temp.jpg"));
     
+    // এখানে ইমেজ অবজেক্ট তৈরি করে width এবং height বের করতে হবে
+    const img = await new Promise(resolve => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.src = URL.createObjectURL(blob);
+    });
+
     const response = await fetch('/api/proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             api: "clipdrop-upscale",
-            base64Data: base64Data
+            base64Data: base64Data,
+            factor: factor, // <-- এই লাইনটি যোগ করা হয়েছে
+            originalWidth: img.width, // <-- এই লাইনটি যোগ করা হয়েছে
+            originalHeight: img.height // <-- এই লাইনটি যোগ করা হয়েছে
         })
     });
 
@@ -4414,14 +4425,15 @@ const downloadMetadataCsv = () => {
     };
 
     const headers = ['File Name', 'Title', 'Keywords', 'Description'];
-    const rows = batchMetadataResults.map(meta => 
-        [
+    const rows = batchMetadataResults.map(meta => {
+        const keywordsString = Array.isArray(meta.keywords) ? meta.keywords.join(', ') : (meta.keywords || '');
+        return [
             escapeCsvCell(meta.fileName),
             escapeCsvCell(meta.title),
-            escapeCsvCell(meta.keywords),
+            escapeCsvCell(keywordsString), // <-- পরিবর্তন: এখানে keywords join করা হচ্ছে
             escapeCsvCell(meta.description)
-        ].join(',')
-    );
+        ].join(',');
+    });
 
     const csvContent = "data:text/csv;charset=utf-8," + headers.join(',') + '\n' + rows.join('\n');
     const encodedUri = encodeURI(csvContent);
@@ -5291,28 +5303,25 @@ if (batchWatermarkSize) {
 
        
         
-       
-      
-        // Initialize API keys
+       // Initialize API keys
         const initializeApiKeys = () => {
-            const geminiApiKey = localStorage.getItem('geminiApiKey');
-            const clipDropApiKey = localStorage.getItem('clipDropApiKey');
-            
-            // Set input values if they exist
+            // গ্লোবাল ভেরিয়েবল সেট করা হচ্ছে
+            apiKey = localStorage.getItem('geminiApiKey') || '';
+            clipDropApiKey = localStorage.getItem('clipDropApiKey') || '';
+
             const geminiApiKeyInput = document.getElementById('geminiApiKeyInput');
             const clipdropApiKeyInput = document.getElementById('clipdropApiKeyInput');
             
-            if (geminiApiKeyInput) geminiApiKeyInput.value = geminiApiKey || '';
-            if (clipdropApiKeyInput) clipdropApiKeyInput.value = clipDropApiKey || '';
+            if (geminiApiKeyInput) geminiApiKeyInput.value = apiKey;
+            if (clipdropApiKeyInput) clipdropApiKeyInput.value = clipDropApiKey;
 
-            // Add API key input event listeners
+            // API key ইনপুট ফিল্ডের জন্য ইভেন্ট লিসেনার
             if (geminiApiKeyInput) {
                 geminiApiKeyInput.addEventListener('change', () => {
                     const newKey = geminiApiKeyInput.value.trim();
                     localStorage.setItem('geminiApiKey', newKey);
-                    if (newKey) {
-                        window.showToast?.('Gemini API key saved', 'success');
-                    }
+                    apiKey = newKey; // গ্লোবাল ভেরিয়েবল আপডেট
+                    if (newKey) window.showToast?.('Gemini API key saved', 'success');
                 });
             }
 
@@ -5320,22 +5329,22 @@ if (batchWatermarkSize) {
                 clipdropApiKeyInput.addEventListener('change', () => {
                     const newKey = clipdropApiKeyInput.value.trim();
                     localStorage.setItem('clipDropApiKey', newKey);
-                    if (newKey) {
-                        window.showToast?.('ClipDrop API key saved', 'success');
-                    }
+                    clipDropApiKey = newKey; // গ্লোবাল ভেরিয়েবল আপডেট
+                    if (newKey) window.showToast?.('ClipDrop API key saved', 'success');
                 });
             }
 
-            // Check if API keys are missing and show notification
-            if (!geminiApiKey) {
-                window.showToast?.('Gemini API key is missing. Please set it in the settings.', 'warning');
-                // Open settings modal automatically if API key is missing
+            // কী অনুপস্থিত থাকলে নোটিফিকেশন দেখানো
+            if (!apiKey) {
+                window.showToast?.('Gemini API key is missing. Please set it in the settings.', 'info');
                 const manageApiKeysBtn = document.getElementById('manageApiKeysBtn');
-                if (manageApiKeysBtn) {
-                    manageApiKeysBtn.click();
-                }
+                if (manageApiKeysBtn) manageApiKeysBtn.click();
             }
+            
+            updateUI(); // কী লোড হওয়ার পর UI আপডেট করা
         };
+      
+        
 
         loadRecentFiles();
         setupDownloadModal();
@@ -5759,6 +5768,7 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
+
 
 
 
