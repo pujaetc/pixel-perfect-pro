@@ -3237,50 +3237,11 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         // ****** END: NEW HELPER FUNCTION FOR RESIZING ******
 
-        // ****** START: UPDATED REIMAGINE FUNCTION ******
+       
      
         // ****** END: UPDATED REIMAGINE FUNCTION ******
 
-        const handleReimagine = async () => {
-    if (!currentFileObject) { window.showToast('Please upload an image first.', 'error'); return; }
-
-    reimagineBtn.disabled = true;
-    reimagineBtn.innerHTML = `<i class="ph ph-spinner animate-spin"></i> Reimagining...`;
-    
-    try {
-        const sourceImageUrl = enhancedImageSrcForEnhance || originalImageSrcForEnhance;
-        const imageBlobForApi = await resizeImageForApi(sourceImageUrl, 1024);
-        const imageBase64 = await toBase64(imageBlobForApi);
-
-        // --- মূল সমাধান: Vercel প্রক্সিকে কল করা হচ্ছে ---
-        const response = await fetch('/api/proxy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                api: "clipdrop-reimagine", // <-- সঠিক API নাম
-                imageBase64: imageBase64
-            })
-        });
-
-        if (!response.ok) {
-            const errorResult = await response.json();
-            throw new Error(errorResult.error || `Server error: ${response.status}`);
-        }
-        
-        const result = await response.json();
-        const imageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
-        const newFileName = `Reimagined-${currentUploadedFileName || 'image.jpg'}`;
-        const newFile = new File([imageBlob], newFileName, { type: imageBlob.type });
-        await updateImageStateAfterEdit(newFile, URL.createObjectURL(newFile));
-        window.showToast('Image successfully reimagined!', 'success');
-    } catch (error) {
-        console.error('Reimagine API Error:', error);
-        window.showToast(`Reimagine failed: ${error.message}`, 'error');
-    } finally {
-        reimagineBtn.disabled = false;
-        reimagineBtn.innerHTML = `<i class="ph-bold ph-sparkle"></i> Reimagine`;
-    }
-};
+       
                
         function drawOnMask(e) {
             if (!isDrawing) return;
@@ -5673,6 +5634,7 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
+
 
 
 
