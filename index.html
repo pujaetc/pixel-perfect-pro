@@ -2605,19 +2605,29 @@ function callApiViaForm(payload) {
 // ==========================================================
 // এই ফাংশনটি এখন শুধুমাত্র একটি Wrapper হিসেবে কাজ করবে
 
- const callGeminiAPI = async (prompt, imageBase64Data_unused, expectJson = true) => {
-    console.log("Resizing image before sending to Gemini API...");
-    if (!originalImageSrcForEnhance) throw new Error("Original image source is missing.");
+ const callGeminiAPI = async (prompt, options = {}, expectJson = true) => {
+    console.log("Preparing data for Gemini API...");
 
-    // ছবিটি রিসাইজ করা হচ্ছে
-    const imageBlobForApi = await resizeImageForApi(originalImageSrcForEnhance, 1024);
+    let imageBase64Data;
+
+    // যদি সরাসরি ফাইল অবজেক্ট দেওয়া হয় (ব্যাচ প্রসেসের জন্য)
+    if (options.fileObject) {
+        const imageBlobForApi = await resizeImageForApi(URL.createObjectURL(options.fileObject), 1024);
+        imageBase64Data = await toBase64(imageBlobForApi);
+    } 
+    // যদি বেস64 ডেটা দেওয়া হয়
+    else if (options.base64Data) {
+        imageBase64Data = options.base64Data;
+    }
+    // পুরোনো পদ্ধতির ফলব্যাক (সিঙ্গেল ইমেজ প্রসেসের জন্য)
+    else {
+        if (!originalImageSrcForEnhance) throw new Error("Original image source is missing.");
+        const imageBlobForApi = await resizeImageForApi(originalImageSrcForEnhance, 1024);
+        imageBase64Data = await toBase64(imageBlobForApi);
+    }
     
-    // রিসাইজ করা ছবিকে base64-এ রূপান্তর করা হচ্ছে
-    const imageBase64Data = await toBase64(imageBlobForApi);
-
     console.log("Calling Vercel proxy for Gemini...");
 
-    // Vercel proxy-কে কল করা হচ্ছে
     const response = await fetch('/api/proxy', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -3090,11 +3100,25 @@ function callApiViaForm(payload) {
             }
         };
 
-           const handleAiUpscale = async (factor, buttonElement) => {
+        const handleAiUpscale = async (factor, buttonElement) => {
+    // ছবির সাইজ পরীক্ষা করার জন্য সর্বোচ্চ পিক্সেল সংখ্যা (১৬ মেগাপিক্সেল)
+    const CLIPDROP_MAX_PIXELS = 16 * 1000 * 1000;
+
     if (!currentFileObject) {
         window.showToast('Please upload an image first.', 'error');
         return;
     }
+
+    // ছবির বর্তমান পিক্সেল সংখ্যা গণনা
+    const currentPixels = currentImageDimensions.width * currentImageDimensions.height;
+    
+    // যদি ছবির সাইজ খুব বড় হয়, তাহলে সতর্কবার্তা দেখিয়ে ফাংশন বন্ধ করুন
+    if (currentPixels > CLIPDROP_MAX_PIXELS) {
+        window.showToast(`Image is too large (${(currentPixels / 1000000).toFixed(1)}MP). AI Upscale supports images up to 16MP.`, 'error');
+        if (aiUpscaleDropdown) aiUpscaleDropdown.classList.add('hidden');
+        return;
+    }
+
     if (aiUpscaleDropdown) aiUpscaleDropdown.classList.add('hidden');
     window.showToast('Upscaling from original image. Manual adjustments will be reset.', 'info');
     if (resetSlidersBtn) resetSlidersBtn.click();
@@ -3716,9 +3740,9 @@ function callApiViaForm(payload) {
     const checks = {
         'normal_2x': { condition: !isOpenCvReady, message: 'OpenCV is not ready for Normal Upscale.' },
         'normal_4x': { condition: !isOpenCvReady, message: 'OpenCV is not ready for Normal Upscale.' },
-        'ai_2x': { condition: !clipDropApiKey, message: 'ClipDrop API key is required for AI Upscale.' }
+        'ai_2x': { condition: !clipDropApiKey, message: 'ClipDrop API key is required for AI Upscale.' },
+        'ai_4x': { condition: !clipDropApiKey, message: 'ClipDrop API key is required for AI Upscale.' } // <-- এই লাইনটি যোগ করা হয়েছে
     };
-
     if (checks[settings.upscale] && checks[settings.upscale].condition) {
         showToast(checks[settings.upscale].message, 'error');
         return;
@@ -3743,7 +3767,7 @@ function callApiViaForm(payload) {
                     batchProgress.textContent = `Generating metadata for ${file.name}...`;
                     const imageBase64Data = await toBase64(file);
                     const promptText = `Analyze the image and generate SEO-friendly metadata. Provide ONLY a valid JSON object with the keys: 'fileName', 'title', 'keywords' (as an array of max 15 strings), and 'description' (a short, compelling sentence). Example: {"fileName": "red-rose.jpg", "title": "Vibrant Red Rose in Full Bloom", "keywords": ["red rose", "flower", "macro", "nature", "romance"], "description": "A stunning macro shot of a vibrant red rose, capturing the delicate texture of its petals."}`;
-                    const meta = await callGeminiAPI(promptText, imageBase64Data, true);
+                    const meta = await callGeminiAPI(promptText, { fileObject: file }, true);
                     batchMetadataResults.push({
                         fileName: file.name,
                         title: meta.title || '',
@@ -5768,6 +5792,7 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
+
 
 
 
