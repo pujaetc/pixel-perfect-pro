@@ -3250,53 +3250,118 @@ document.addEventListener('DOMContentLoaded', () => {
             removalImageObject.src = enhancedImageSrcForEnhance || originalImageSrcForEnhance;
         }
         
-    async function handleObjectRemoval() {
-    const maskData = maskCtx.getImageData(0, 0, removalMaskCanvas.width, removalMaskCanvas.height);
-    if (![...maskData.data].some(c => c !== 0)) { window.showToast('Please paint a mask over the object to remove.', 'info'); return; }
-    
-    if (removalLoadingOverlay) removalLoadingOverlay.classList.remove('hidden');
-    
-    try {
-        const imageBase64 = removalImageCanvas.toDataURL('image/jpeg').split(',')[1];
-        const maskBase64 = removalMaskCanvas.toDataURL('image/png').split(',')[1];
+        // ==========================================================
+        // ||       START: OBJECT REMOVAL FIX                      ||
+        // ==========================================================
 
-        // --- মূল সমাধান: Vercel প্রক্সিকে কল করা হচ্ছে ---
-        const response = await fetch('/api/proxy', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                api: "clipdrop-cleanup", // <-- সঠিক API নাম
-                imageBase64: imageBase64,
-                maskBase64: maskBase64
-            })
-        });
+        /**
+         * Resizes a canvas if its resolution exceeds a maximum pixel count.
+         * @param {HTMLCanvasElement} sourceCanvas The canvas to resize.
+         * @param {number} maxPixels The maximum allowed number of pixels.
+         * @returns {HTMLCanvasElement} A new, resized canvas, or a copy of the original if no resize was needed.
+         */
+        const resizeCanvasForApi = (sourceCanvas, maxPixels) => {
+            const { width, height } = sourceCanvas;
+            const currentPixels = width * height;
 
-        if (!response.ok) {
-            const errorResult = await response.json();
-            throw new Error(errorResult.error || `Server error: ${response.status}`);
-        }
-        
-        const result = await response.json();
-        const resultingImageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
-        removedObjectBlob = resultingImageBlob;
-        
-        if (saveRemovedObjectBtn) saveRemovedObjectBtn.disabled = false;
-        const newSrc = URL.createObjectURL(resultingImageBlob);
-        removalImageObject.onload = () => {
-            removalCtx.clearRect(0, 0, removalImageCanvas.width, removalImageCanvas.height);
-            removalCtx.drawImage(removalImageObject, 0, 0);
+            if (currentPixels <= maxPixels) {
+                // No resize needed, return a direct copy.
+                const newCanvas = document.createElement('canvas');
+                newCanvas.width = width;
+                newCanvas.height = height;
+                newCanvas.getContext('2d').drawImage(sourceCanvas, 0, 0);
+                return newCanvas;
+            }
+
+            console.log(`Resizing canvas from ${width}x${height} to fit under ${maxPixels / 1_000_000}MP...`);
+            window.showToast?.('Image is too large, resizing for removal...', 'info');
+
+            const ratio = Math.sqrt(maxPixels / currentPixels);
+            const newWidth = Math.floor(width * ratio);
+            const newHeight = Math.floor(height * ratio);
+
+            const resizedCanvas = document.createElement('canvas');
+            resizedCanvas.width = newWidth;
+            resizedCanvas.height = newHeight;
+            const ctx = resizedCanvas.getContext('2d');
+            ctx.drawImage(sourceCanvas, 0, 0, newWidth, newHeight);
+            
+            return resizedCanvas;
         };
-        removalImageObject.src = newSrc;
-        if (clearMaskBtn) clearMaskBtn.click();
-        window.showToast('Object removed! Click Save & Close to apply.', 'success');
 
-    } catch (error) {
-        console.error('Object Removal Error:', error);
-        window.showToast(`Object removal failed: ${error.message}`, 'error');
-    } finally {
-        if (removalLoadingOverlay) removalLoadingOverlay.classList.add('hidden');
-    }
-}
+        async function handleObjectRemoval() {
+            const maskData = maskCtx.getImageData(0, 0, removalMaskCanvas.width, removalMaskCanvas.height);
+            if (![...maskData.data].some(c => c !== 0)) { 
+                window.showToast?.('Please paint a mask over the object to remove.', 'info'); 
+                return; 
+            }
+            
+            if (removalLoadingOverlay) removalLoadingOverlay.classList.remove('hidden');
+            
+            try {
+                // *** START OF FIX ***
+                const MAX_PIXELS_CLIPDROP = 16 * 1000 * 1000;
+
+                // Resize the image and mask canvases if they are too large
+                const resizedImageCanvas = resizeCanvasForApi(removalImageCanvas, MAX_PIXELS_CLIPDROP);
+                const resizedMaskCanvas = resizeCanvasForApi(removalMaskCanvas, MAX_PIXELS_CLIPDROP);
+                
+                // Get base64 data from the (potentially resized) canvases
+                const imageBase64 = resizedImageCanvas.toDataURL('image/jpeg').split(',')[1];
+                const maskBase64 = resizedMaskCanvas.toDataURL('image/png').split(',')[1];
+                // *** END OF FIX ***
+
+                // Vercel proxy call remains the same
+                const response = await fetch('/api/proxy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        api: "clipdrop-cleanup",
+                        imageBase64: imageBase64,
+                        maskBase64: maskBase64
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorResult = await response.json();
+                    throw new Error(errorResult.error || `Server error: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                const resultingImageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
+                removedObjectBlob = resultingImageBlob;
+                
+                if (saveRemovedObjectBtn) saveRemovedObjectBtn.disabled = false;
+                const newSrc = URL.createObjectURL(resultingImageBlob);
+                
+                // We create a new image object to load the result
+                const resultImage = new Image();
+                resultImage.onload = () => {
+                    // Update the original high-res canvas with the new image content
+                    removalImageCanvas.width = resultImage.width;
+                    removalImageCanvas.height = resultImage.height;
+                    removalCtx.clearRect(0, 0, removalImageCanvas.width, removalImageCanvas.height);
+                    removalCtx.drawImage(resultImage, 0, 0);
+
+                    // Also update the object used for redrawing the modal
+                    removalImageObject.src = newSrc;
+                };
+                resultImage.src = newSrc;
+                
+                if (clearMaskBtn) clearMaskBtn.click();
+                window.showToast?.('Object removed! Click Save & Close to apply.', 'success');
+
+            } catch (error) {
+                console.error('Object Removal Error:', error);
+                window.showToast?.(`Object removal failed: ${error.message}`, 'error');
+            } finally {
+                if (removalLoadingOverlay) removalLoadingOverlay.classList.add('hidden');
+            }
+        }
+        // ==========================================================
+        // ||       END: OBJECT REMOVAL FIX                        ||
+        // ==========================================================
+
       
         async function saveAndCloseObjectRemoval() {
             if (!removedObjectBlob) {
@@ -5593,6 +5658,7 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
+
 
 
 
