@@ -2042,7 +2042,78 @@
     </div>
 
     <!-- END: NEW FOOTER MODALS -->
-    <!-- START: NEW SCRIPT FOR FOOTER MODALS -->   
+   <script>
+document.addEventListener(&#39;DOMContentLoaded&#39;, () =&gt; {
+    // Function to open a modal
+    const openModal = (modalId) =&gt; {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.classList.remove(&#39;hidden&#39;);
+        }
+    };
+
+    // Function to close a modal
+    const closeModal = (modalId) =&gt; {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.classList.add(&#39;hidden&#39;);
+        }
+    };
+
+    // ****** নত&#2497;ন ফ&#2494;&#2434;শনট&#2495; এখ&#2494;ন&#2503; য&#2497;ক&#2509;ত কর&#2497;ন ******
+    // Function to switch modals
+    window.switchModal = (closeId, openId) =&gt; {
+        closeModal(closeId);
+        openModal(openId);
+    };
+
+    // Add event listeners to all modal trigger elements
+    document.querySelectorAll(&#39;[data-modal-target]&#39;).forEach(trigger =&gt; {
+        trigger.addEventListener(&#39;click&#39;, (event) =&gt; {
+            event.preventDefault();
+            const modalId = trigger.getAttribute(&#39;data-modal-target&#39;);
+            openModal(modalId);
+        });
+    });
+
+    // Add event listeners to all modal close buttons
+    document.querySelectorAll(&#39;[data-modal-close]&#39;).forEach(button =&gt; {
+        button.addEventListener(&#39;click&#39;, () =&gt; {
+            const modalId = button.getAttribute(&#39;data-modal-close&#39;);
+            // Find the parent modal and close it
+            const parentModal = button.closest(&#39;.modal-container&#39;);
+            if (parentModal) {
+                closeModal(parentModal.id);
+            }
+        });
+    });
+
+    // Add event listener to close modals when clicking on the overlay
+    document.querySelectorAll(&#39;.modal-container&#39;).forEach(modalOverlay =&gt; {
+        modalOverlay.addEventListener(&#39;click&#39;, (event) =&gt; {
+            // If the click is on the overlay itself (and not its children)
+            if (event.target === modalOverlay) {
+                closeModal(modalOverlay.id);
+            }
+        });
+    });
+
+    // Close modals with the Escape key
+    document.addEventListener(&#39;keydown&#39;, (event) =&gt; {
+        if (event.key === &#39;Escape&#39;) {
+            document.querySelectorAll(&#39;.modal-container:not(.hidden)&#39;).forEach(modal =&gt; {
+                 closeModal(modal.id);
+            });
+        }
+    });
+});
+  
+  // Function to switch modals
+window.switchModal = (closeId, openId) =&gt; {
+    closeModal(closeId);
+    openModal(openId);
+};
+</script>
 
 
 <script>
@@ -5772,6 +5843,7 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
+
 
 
 
