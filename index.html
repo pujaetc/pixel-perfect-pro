@@ -5342,12 +5342,7 @@ if (batchWatermarkSize) {
                 });
             }
 
-            // কী অনুপস্থিত থাকলে নোটিফিকেশন দেখানো
-            if (!apiKey) {
-                window.showToast?.('Gemini API key is missing. Please set it in the settings.', 'info');
-                const manageApiKeysBtn = document.getElementById('manageApiKeysBtn');
-                if (manageApiKeysBtn) manageApiKeysBtn.click();
-            }
+            // NOTE: no auto-popup/toast on load; user can open via Manage API Keys button if needed
             
             updateUI(); // কী লোড হওয়ার পর UI আপডেট করা
         };
