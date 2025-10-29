@@ -3737,11 +3737,15 @@ function callApiViaForm(payload) {
                 settings: settings // এটি দিয়ে আপনি জানতে পারবেন ব্যবহারকারী কোন সেটিং ব্যবহার করেছে
             });
 
+     const settings = getBatchSettings();
+
+    // ↓↓↓ এই সম্পূর্ণ অংশটি প্রতিস্থাপন করুন ↓↓↓
     const checks = {
         'normal_2x': { condition: !isOpenCvReady, message: 'OpenCV is not ready for Normal Upscale.' },
         'normal_4x': { condition: !isOpenCvReady, message: 'OpenCV is not ready for Normal Upscale.' },
-        'ai_2x': { condition: !clipDropApiKey, message: 'ClipDrop API key is required for AI Upscale.' },
-        'ai_4x': { condition: !clipDropApiKey, message: 'ClipDrop API key is required for AI Upscale.' } 
+        // AI Upscale এর জন্য আর কী (key) চেক করা হবে না, তাই condition: false করে দেওয়া হয়েছে
+        'ai_2x': { condition: false, message: '' },
+        'ai_4x': { condition: false, message: '' }
     };
     if (checks[settings.upscale] && checks[settings.upscale].condition) {
         showToast(checks[settings.upscale].message, 'error');
@@ -5792,6 +5796,7 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
+
 
 
 
