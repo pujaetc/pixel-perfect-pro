@@ -1,7 +1,3 @@
-// File: /api/proxy.js (on your Vercel project)
-import fetch from 'node-fetch';
-import FormData from 'form-data';
-
 export default async function handler(request, response) {
   // শুধুমাত্র POST অনুরোধ গ্রহণ করা হবে
   if (request.method !== 'POST') {
@@ -12,6 +8,7 @@ export default async function handler(request, response) {
     const payload = request.body;
     const apiToCall = payload.api;
 
+    // আপনার গোপন API কী Environment Variable থেকে লোড করা হচ্ছে
     const geminiApiKey = process.env.GEMINI_API_KEY;
     const clipdropApiKey = process.env.CLIPDROP_API_KEY;
     
@@ -26,18 +23,13 @@ export default async function handler(request, response) {
           generationConfig: payload.expectJson ? { responseMimeType: "application/json" } : {}
         };
         
-        // *** ভুলটি এখানে সংশোধন করা হয়েছে: মডেলের নাম ঠিক করা হয়েছে ***
         const apiFetch = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(geminiPayload)
         });
 
-        if (!apiFetch.ok) {
-            // Gemini থেকে আসা error মেসেজটি এখন টেক্সট হিসেবে ক্লায়েন্টকে পাঠানো হবে
-            const errorText = await apiFetch.text();
-            throw new Error(`Gemini API Error: ${errorText}`);
-        }
+        if (!apiFetch.ok) throw new Error(`Gemini API Error: ${await apiFetch.text()}`);
         apiResponse = await apiFetch.json();
         break;
       }
@@ -46,6 +38,7 @@ export default async function handler(request, response) {
         if (!clipdropApiKey) throw new Error("Server Error: ClipDrop API Key is not configured.");
         
         const formData = new FormData();
+        // Base64 থেকে Blob তৈরি করা হচ্ছে
         const imageBlob = new Blob([Buffer.from(payload.imageBase64, 'base64')], { type: 'image/jpeg' });
         const maskBlob = new Blob([Buffer.from(payload.maskBase64, 'base64')], { type: 'image/png' });
         
@@ -88,25 +81,26 @@ export default async function handler(request, response) {
      case "clipdrop-upscale": {
         if (!clipdropApiKey) throw new Error("Server Error: ClipDrop API Key is not configured.");
         
-        const { base64Data, factor, width, height } = payload;
+        const { base64Data, factor, originalWidth, originalHeight } = payload;
         
-        const formData = new FormData();
-        const imageBlob = new Blob([Buffer.from(base64Data, 'base64')], { type: 'image/jpeg' });
-        formData.append('image_file', imageBlob, 'image.jpg');
-        
-        // ** আপস্কেলের জন্য সঠিক যুক্তি **
-        if (width && height) {
-            formData.append('target_width', String(Math.round(width)));
-            formData.append('target_height', String(Math.round(height)));
-        } 
-        else if (factor) {
-            formData.append('scale', String(factor));
-        } 
-        else {
-            throw new Error("Server Error: Either 'factor' or 'width'/'height' must be provided for upscaling.");
+        const targetWidth = originalWidth * factor;
+        const targetHeight = originalHeight * factor;
+
+        if (isNaN(targetWidth) || isNaN(targetHeight) || targetWidth === 0 || targetHeight === 0) {
+            throw new Error("Invalid target dimensions calculated on server.");
         }
 
-        const apiFetch = await fetch('https://clipdrop-api.co/super-resolution/v1', {
+        const formData = new FormData();
+        const imageBlob = new Blob([Buffer.from(base64Data, 'base64')], { type: 'image/jpeg' });
+        
+        formData.append('image_file', imageBlob, 'image.jpg');
+        
+        // --- মূল সমাধান এখানেই ---
+        // সংখ্যাগুলোকে স্ট্রিং-এ রূপান্তর করে append করা হচ্ছে
+        formData.append('target_width', String(targetWidth));
+        formData.append('target_height', String(targetHeight));
+
+        const apiFetch = await fetch('https://clipdrop-api.co/image-upscaling/v1/upscale', {
           method: 'POST',
           headers: { 'x-api-key': clipdropApiKey },
           body: formData,
@@ -122,16 +116,15 @@ export default async function handler(request, response) {
         apiResponse = { imageBase64: buffer.toString('base64') };
         break;
       }
-
       default:
         throw new Error("Invalid API specified.");
     }
 
+    // ক্লায়েন্টকে সফলভাবে ফলাফল পাঠানো হচ্ছে
     return response.status(200).json(apiResponse);
 
   } catch (error) {
     console.error('Server-side error:', error);
-    // সার্ভারের error মেসেজটি ক্লায়েন্টকে পাঠানো হচ্ছে
     return response.status(500).json({ error: error.message });
   }
 }
