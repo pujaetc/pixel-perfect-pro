@@ -3100,7 +3100,7 @@ function callApiViaForm(payload) {
             }
         };
 
-    const handleAiUpscale = async (factor, buttonElement) => {
+   const handleAiUpscale = async (factor, buttonElement) => {
     const CLIPDROP_MAX_RESOLUTION = 4096;
 
     if (!currentFileObject) {
@@ -3109,9 +3109,7 @@ function callApiViaForm(payload) {
     }
 
     if (aiUpscaleDropdown) aiUpscaleDropdown.classList.add('hidden');
-    window.showToast('Upscaling from original image. Manual adjustments will be reset.', 'info');
-    if (resetSlidersBtn) resetSlidersBtn.click();
-
+    
     const upscaleIcon = buttonElement?.querySelector('.upscale-icon');
     const upscaleSpinner = buttonElement?.querySelector('.upscale-spinner');
     if (buttonElement) buttonElement.disabled = true;
@@ -3127,52 +3125,60 @@ function callApiViaForm(payload) {
         }
 
         // ধাপ ১: আদর্শ টার্গেট সাইজ গণনা করুন
-        let idealWidth = originalWidth * factor;
-        let idealHeight = originalHeight * factor;
-        
-        let finalTargetWidth = idealWidth;
-        let finalTargetHeight = idealHeight;
+        const idealWidth = originalWidth * factor;
+        const idealHeight = originalHeight * factor;
 
-        // ধাপ ২: সীমা অতিক্রম করছে কি না তা পরীক্ষা করুন এবং প্রয়োজন হলে নতুন সাইজ গণনা করুন
+        // ধাপ ২: সার্ভারে পাঠানোর জন্য একটি অবজেক্ট তৈরি করুন
+        const requestBody = {
+            api: "clipdrop-upscale",
+            base64Data: await toBase64(currentFileObject)
+        };
+        
+        let finalTargetWidth, finalTargetHeight;
+
+        // ধাপ ৩: সীমা অতিক্রম করলে width এবং height সেট করুন, নাহলে factor সেট করুন
         if (idealWidth > CLIPDROP_MAX_RESOLUTION || idealHeight > CLIPDROP_MAX_RESOLUTION) {
-            
             window.showToast(`Upscale capped to ${CLIPDROP_MAX_RESOLUTION}px limit.`, 'info');
-            
             const aspectRatio = originalWidth / originalHeight;
 
-            if (aspectRatio >= 1) { // যদি ছবিটি চওড়া বা বর্গাকার হয়
+            if (aspectRatio >= 1) { // চওড়া বা বর্গাকার ছবির জন্য
                 finalTargetWidth = CLIPDROP_MAX_RESOLUTION;
                 finalTargetHeight = Math.round(CLIPDROP_MAX_RESOLUTION / aspectRatio);
-            } else { // যদি ছবিটি লম্বা হয়
+            } else { // লম্বা ছবির জন্য
                 finalTargetHeight = CLIPDROP_MAX_RESOLUTION;
                 finalTargetWidth = Math.round(CLIPDROP_MAX_RESOLUTION * aspectRatio);
             }
+            // শুধুমাত্র width এবং height যোগ করুন
+            requestBody.width = finalTargetWidth;
+            requestBody.height = finalTargetHeight;
+        } else {
+            // যদি সীমা ঠিক থাকে, তাহলে factor পাঠান
+            finalTargetWidth = idealWidth;
+            finalTargetHeight = idealHeight;
+            requestBody.factor = factor;
         }
         
-        const originalBase64 = await toBase64(currentFileObject);
+        // ম্যানুয়াল অ্যাডজাস্টমেন্ট রিসেট করার বার্তা এখন এখানে দেখানো হচ্ছে
+        window.showToast('Upscaling from original image. Manual adjustments will be reset.', 'info');
+        if (resetSlidersBtn) resetSlidersBtn.click();
 
-        // ধাপ ৩: আপনার প্রক্সি সার্ভারে চূড়ান্ত টার্গেট সাইজ পাঠান
+        // ধাপ ৪: শুধুমাত্র প্রয়োজনীয় তথ্যসহ সার্ভারে রিকোয়েস্ট পাঠান
         const response = await fetch('/api/proxy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                api: "clipdrop-upscale",
-                base64Data: originalBase64,
-                // Clipdrop API 'width' এবং 'height' প্যারামিটার গ্রহণ করে
-                width: finalTargetWidth,
-                height: finalTargetHeight
-            })
+            body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {
             const errorResult = await response.json();
-            throw new Error(errorResult.error || `Server error: ${response.status}`);
+            // সার্ভার থেকে আসা error মেসেজটি এখন আরও পরিষ্কারভাবে দেখানো হবে
+            throw new Error(errorResult.error || `Server responded with status: ${response.status}`);
         }
 
         const result = await response.json();
         const imageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
         
-        const newFileName = `Upscaled-AI-Capped-${currentUploadedFileName || 'image.jpg'}`;
+        const newFileName = `Upscaled-AI-${finalTargetWidth}x${finalTargetHeight}-${currentUploadedFileName || 'image.jpg'}`;
         const newFile = new File([imageBlob], newFileName, { type: imageBlob.type });
         
         await updateImageStateAfterEdit(newFile, URL.createObjectURL(newFile));
@@ -5806,6 +5812,7 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
+
 
 
 
