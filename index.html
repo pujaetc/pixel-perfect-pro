@@ -3725,9 +3725,7 @@ function callApiViaForm(payload) {
 
     const checks = {
         'normal_2x': { condition: !isOpenCvReady, message: 'OpenCV is not ready for Normal Upscale.' },
-        'normal_4x': { condition: !isOpenCvReady, message: 'OpenCV is not ready for Normal Upscale.' },
-        'ai_2x': { condition: !clipDropApiKey, message: 'ClipDrop API key is required for AI Upscale.' },
-        'ai_4x': { condition: !clipDropApiKey, message: 'ClipDrop API key is required for AI Upscale.' } 
+        'normal_4x': { condition: !isOpenCvReady, message: 'OpenCV is not ready for Normal Upscale.' }
     };
     if (checks[settings.upscale] && checks[settings.upscale].condition) {
         showToast(checks[settings.upscale].message, 'error');
@@ -5778,7 +5776,6 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
-
 
 
 
