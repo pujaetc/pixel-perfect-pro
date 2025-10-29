@@ -3737,9 +3737,6 @@ function callApiViaForm(payload) {
                 settings: settings // এটি দিয়ে আপনি জানতে পারবেন ব্যবহারকারী কোন সেটিং ব্যবহার করেছে
             });
 
-     const settings = getBatchSettings();
-
-     /*
     const checks = {
         'normal_2x': { condition: !isOpenCvReady, message: 'OpenCV is not ready for Normal Upscale.' },
         'normal_4x': { condition: !isOpenCvReady, message: 'OpenCV is not ready for Normal Upscale.' },
@@ -3750,7 +3747,6 @@ function callApiViaForm(payload) {
         showToast(checks[settings.upscale].message, 'error');
         return;
     }
-    */
    
 
     startBatchProcessBtn.disabled = true;
@@ -5796,9 +5792,6 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
-
-
-
 
 
 
