@@ -3100,29 +3100,18 @@ function callApiViaForm(payload) {
             }
         };
 
-     const handleAiUpscale = async (factor, buttonElement) => {
-    const CLIPDROP_MAX_RESOLUTION = 4096; // <-- নতুন: সর্বোচ্চ রেজোলিউশন লিমিট
+    const handleAiUpscale = async (factor, buttonElement) => {
+    const CLIPDROP_MAX_RESOLUTION = 4096;
 
     if (!currentFileObject) {
         window.showToast('Please upload an image first.', 'error');
         return;
     }
-    
-    // <-- নতুন: আপস্কেলের পর ছবির সাইজ কী হবে তা গণনা করা হচ্ছে
-    const targetWidth = currentImageDimensions.width * factor;
-    const targetHeight = currentImageDimensions.height * factor;
-
-    // <-- নতুন: গণনা করা সাইজ লিমিটের চেয়ে বড় কি না তা পরীক্ষা করা হচ্ছে
-    if (targetWidth > CLIPDROP_MAX_RESOLUTION || targetHeight > CLIPDROP_MAX_RESOLUTION) {
-        window.showToast(`Error: ${factor}x upscale would result in ${targetWidth}x${targetHeight}px, which exceeds the 4096px limit.`, 'error');
-        if (aiUpscaleDropdown) aiUpscaleDropdown.classList.add('hidden');
-        return; // লিমিট পার হলে ফাংশনটি এখানেই শেষ হবে
-    }
 
     if (aiUpscaleDropdown) aiUpscaleDropdown.classList.add('hidden');
     window.showToast('Upscaling from original image. Manual adjustments will be reset.', 'info');
     if (resetSlidersBtn) resetSlidersBtn.click();
-    
+
     const upscaleIcon = buttonElement?.querySelector('.upscale-icon');
     const upscaleSpinner = buttonElement?.querySelector('.upscale-spinner');
     if (buttonElement) buttonElement.disabled = true;
@@ -3130,23 +3119,48 @@ function callApiViaForm(payload) {
     if (upscaleSpinner) upscaleSpinner.classList.remove('hidden');
 
     try {
-        const originalBase64 = await toBase64(currentFileObject);
-        const { width: originalWidth, height: originalHeight } = currentImageDimensions;
+        const originalWidth = currentImageDimensions.width;
+        const originalHeight = currentImageDimensions.height;
 
-        // নিশ্চিত করুন যে width এবং height সঠিক সংখ্যা
         if (!originalWidth || !originalHeight) {
             throw new Error("Could not determine original image dimensions.");
         }
 
+        // ধাপ ১: আদর্শ টার্গেট সাইজ গণনা করুন
+        let idealWidth = originalWidth * factor;
+        let idealHeight = originalHeight * factor;
+        
+        let finalTargetWidth = idealWidth;
+        let finalTargetHeight = idealHeight;
+
+        // ধাপ ২: সীমা অতিক্রম করছে কি না তা পরীক্ষা করুন এবং প্রয়োজন হলে নতুন সাইজ গণনা করুন
+        if (idealWidth > CLIPDROP_MAX_RESOLUTION || idealHeight > CLIPDROP_MAX_RESOLUTION) {
+            
+            window.showToast(`Upscale capped to ${CLIPDROP_MAX_RESOLUTION}px limit.`, 'info');
+            
+            const aspectRatio = originalWidth / originalHeight;
+
+            if (aspectRatio >= 1) { // যদি ছবিটি চওড়া বা বর্গাকার হয়
+                finalTargetWidth = CLIPDROP_MAX_RESOLUTION;
+                finalTargetHeight = Math.round(CLIPDROP_MAX_RESOLUTION / aspectRatio);
+            } else { // যদি ছবিটি লম্বা হয়
+                finalTargetHeight = CLIPDROP_MAX_RESOLUTION;
+                finalTargetWidth = Math.round(CLIPDROP_MAX_RESOLUTION * aspectRatio);
+            }
+        }
+        
+        const originalBase64 = await toBase64(currentFileObject);
+
+        // ধাপ ৩: আপনার প্রক্সি সার্ভারে চূড়ান্ত টার্গেট সাইজ পাঠান
         const response = await fetch('/api/proxy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 api: "clipdrop-upscale",
                 base64Data: originalBase64,
-                factor: factor, // <-- ফ্যাক্টর পাঠানো হচ্ছে
-                originalWidth: originalWidth, // <-- মূল প্রস্থ পাঠানো হচ্ছে
-                originalHeight: originalHeight // <-- মূল উচ্চতা পাঠানো হচ্ছে
+                // Clipdrop API 'width' এবং 'height' প্যারামিটার গ্রহণ করে
+                width: finalTargetWidth,
+                height: finalTargetHeight
             })
         });
 
@@ -3158,11 +3172,11 @@ function callApiViaForm(payload) {
         const result = await response.json();
         const imageBlob = await (await fetch(`data:image/png;base64,${result.imageBase64}`)).blob();
         
-        const newFileName = `Upscaled-AI-${factor}x-${currentUploadedFileName || 'image.jpg'}`;
+        const newFileName = `Upscaled-AI-Capped-${currentUploadedFileName || 'image.jpg'}`;
         const newFile = new File([imageBlob], newFileName, { type: imageBlob.type });
         
         await updateImageStateAfterEdit(newFile, URL.createObjectURL(newFile));
-        window.showToast(`Image successfully upscaled by ${factor}x! Preview updated.`, 'success');
+        window.showToast(`Image successfully upscaled to ${finalTargetWidth}x${finalTargetHeight}px!`, 'success');
 
     } catch (error) {
         console.error('AI Upscale API Error:', error);
@@ -5792,6 +5806,7 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
+
 
 
 
