@@ -82,13 +82,41 @@ export default async function handler(request, response) {
         if (!clipdropApiKey) throw new Error("Server Error: ClipDrop API Key is not configured.");
         
         const { base64Data, factor, originalWidth, originalHeight } = payload;
-        
-        const targetWidth = originalWidth * factor;
-        const targetHeight = originalHeight * factor;
+        const MAX_UPSCALE_DIMENSION = 4096;
 
-        if (isNaN(targetWidth) || isNaN(targetHeight) || targetWidth === 0 || targetHeight === 0) {
+        const rawTargetWidth = originalWidth * factor;
+        const rawTargetHeight = originalHeight * factor;
+
+        if (
+          isNaN(rawTargetWidth) ||
+          isNaN(rawTargetHeight) ||
+          rawTargetWidth === 0 ||
+          rawTargetHeight === 0
+        ) {
             throw new Error("Invalid target dimensions calculated on server.");
         }
+
+        const scaleAdjustment = Math.min(
+          MAX_UPSCALE_DIMENSION / rawTargetWidth,
+          MAX_UPSCALE_DIMENSION / rawTargetHeight,
+          1
+        );
+
+        const targetWidth = Math.max(
+          1,
+          Math.min(
+            MAX_UPSCALE_DIMENSION,
+            Math.round(rawTargetWidth * scaleAdjustment)
+          )
+        );
+
+        const targetHeight = Math.max(
+          1,
+          Math.min(
+            MAX_UPSCALE_DIMENSION,
+            Math.round(rawTargetHeight * scaleAdjustment)
+          )
+        );
 
         const formData = new FormData();
         const imageBlob = new Blob([Buffer.from(base64Data, 'base64')], { type: 'image/jpeg' });
