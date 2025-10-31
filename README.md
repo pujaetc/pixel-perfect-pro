@@ -39,7 +39,7 @@
 |-------|------------|
 | **Frontend** | HTML5, Tailwind CSS, JavaScript (ES6) |
 | **Libraries** | OpenCV.js, Cropper.js, JSZip, Phosphor Icons |
-| **Backend/API** | Google Apps Script / Supabase / External APIs |
+| **Backend/API** | Vercel / Supabase / External APIs |
 | **Hosting** | Vercel / Blogger Integration |
 | **Authentication** | Supabase Auth (Google & GitHub) |
 
