@@ -4773,7 +4773,7 @@ if (batchWatermarkSize) {
                       if (rng() < 0.5) {
                        cv.flip(baseRGB, baseRGB, 1); 
                    }
-                    const edgeDarkness = 0.65 * intensity; 
+                    
 
                     // Build a black vignette mask using a simple radial falloff
                     // Center ~1, edges ~ (1 - edgeDarkness)
@@ -5915,6 +5915,7 @@ document.addEventListener('DOMContentLoaded', function () {
    
 </body>
 </html>    
+
 
 
 
